@@ -1,17 +1,13 @@
+const utils = require('../utils');
 const fsm = require('./fsm');
-
-const common_stops = [
-   '~', '`', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
-   '-', '_', '=', '+', '{', '}', '[', ']', '\\', '|', ':', ';',
-   '"', '\'', ',', '.', '<', '>', '/', '?', ' ', '\t', '\r', '\n'
-];
+const parser_ruby = require('./ruby');
 
 class WordTokenizer {
    process(text) {
       let output = [];
       let new_word = true;
       text.split('').forEach((ch) => {
-         if (common_stops.indexOf(ch) < 0) {
+         if (utils.common_stops.indexOf(ch) < 0) {
             if (new_word) {
                output.push(ch);
                new_word = false;
@@ -30,14 +26,18 @@ class WordTokenizer {
 }
 
 class SymbolTokenizer {
-   // merge 'a' '_' 'b' => 'a_b'
+   // merge like 'a' '_' 'b' => 'a_b'
+   constructor(connectors) {
+      this.connectors = connectors || ['_'];
+   }
+
    process(input) {
       let output = [];
       let in_word = false;
       input.forEach((x) => {
-         if (x.token === '_' || common_stops.indexOf(x.token) < 0) {
+         if (utils.contains(this.connectors, x.token) || !utils.contains(utils.common_stops, x.token)) {
             if (in_word) {
-               last(output).token += x.token;
+               utils.last(output).token += x.token;
             } else {
                in_word = true;
                output.push({ token: x.token, tag: x.tag });
@@ -132,13 +132,10 @@ class RubyTokenizer {
    process(text) {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
-      tokens = new SymbolTokenizer().process(tokens);
+      tokens = new SymbolTokenizer(['_', '@']).process(tokens);
+      tokens = new parser_ruby.RubyScope().process(tokens);
       return tokens;
    }
-}
-
-function last (array) {
-   return array[array.length-1];
 }
 
 module.exports = {

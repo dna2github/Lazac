@@ -1,3 +1,8 @@
+const utils = require('../utils');
+
+const TAG_STRING = 'string';
+const TAG_COMMENT = 'comment'
+
 class Condition {
    constructor(priority, act, check, state) {
       this.priority = priority;
@@ -96,7 +101,7 @@ class FeatureRoot extends Feature {
                token: x.token,
                tag: null
             });
-         }, always)
+         }, utils.always)
       );
       this.register_state('epsilon', empty_state);
       this.set_entry('epsilon');
@@ -107,13 +112,13 @@ class FeatureCommonString extends Feature {
    constructor(marks) {
       super();
       let string_state = new State(
-         new Condition(0, act_concat, always)
+         new Condition(0, utils.act_concat, utils.always)
       );
       let string_escape_state = new State(
-         new Condition(0, act_concat, always, string_state)
+         new Condition(0, utils.act_concat, utils.always, string_state)
       );
       string_state.register_condition(new Condition(
-         0, act_concat,
+         0, utils.act_concat,
          (x, env) => x.token === '\\',
          string_escape_state
       ));
@@ -134,16 +139,16 @@ class FeatureCommonString extends Feature {
          5, (output, x, env) => {
             output.push({
                token: x.token,
-               tag: 'S'
+               tag: TAG_STRING
             });
             env.stop_mark = x.token;
          }, (x, env) => {
-            return contains(this.marks, x.token);
+            return utils.contains(this.marks, x.token);
          }, string_state
       ));
       string_state.register_condition(new Condition(
          5, (output, x, env) => {
-            act_concat(output, x, env);
+            utils.act_concat(output, x, env);
             env.stop_mark = null;
          }, (x, env) => {
             return env.stop_mark === x.token;
@@ -164,26 +169,26 @@ class FeatureCommonString extends Feature {
             let punc = x.token.repeat(3);
             output.push({
                token: punc,
-               tag: 'S'
+               tag: TAG_STRING
             });
             env.stop_mark = punc;
             return 3;
          }, (x, env) => {
             return (
-               contains(this.marks, x.token) &&
-               text_cmp_n(x.token.repeat(3), env.input, env.input_i, 3)
+               utils.contains(this.marks, x.token) &&
+               utils.text_cmp_n(x.token.repeat(3), env.input, env.input_i, 3)
             );
          }, string_state
       ));
       string_state.register_condition(new Condition(
          5, (output, x, env) => {
-            act_concat(output, { token: env.stop_mark }, env);
+            utils.act_concat(output, { token: env.stop_mark }, env);
             env.stop_mark = null;
             return 3;
          }, (x, env) => {
             return (
-               contains(this.marks, x.token) &&
-               text_cmp_n(env.stop_mark, env.input, env.input_i, 3)
+               utils.contains(this.marks, x.token) &&
+               utils.text_cmp_n(env.stop_mark, env.input, env.input_i, 3)
             );
          }, epsilon
       ));
@@ -195,7 +200,7 @@ class FeatureCommonComment extends Feature {
    constructor(state_name, start, end, include_end, tag) {
       super();
       let comment = new State(
-         new Condition(0, act_concat, always)
+         new Condition(0, utils.act_concat, utils.always)
       );
       this.register_state(state_name, comment);
       this.set_entry(null);
@@ -216,7 +221,7 @@ class FeatureCommonComment extends Feature {
          this.env.end = end;
       }
       this.env.include_end = include_end;
-      this.env.tag = tag || 'C';
+      this.env.tag = tag || TAG_COMMENT;
    }
 
    merge_feature_to(feature) {
@@ -235,17 +240,17 @@ class FeatureCommonComment extends Feature {
          5, (output, x, env) => {
             output.push({ token: start, tag: tag });
             return start_len;
-         }, factory_text_cmp(start, start_len), comment
+         }, utils.factory_text_cmp(start, start_len), comment
       ));
       comment.register_condition(new Condition(
          5, (output, x, env) => {
             if (include_end) {
-               act_concat(output, { token: end }, env);
+               utils.act_concat(output, { token: end }, env);
             } else {
                output.push({ token: end, tag: null });
             }
             return end_len;
-         }, factory_text_cmp(end, end_len), epsilon
+         }, utils.factory_text_cmp(end, end_len), epsilon
       ));
       return feature;
    }
@@ -258,17 +263,17 @@ class FeatureRubyHereDocString extends Feature {
    constructor() {
       super();
       let string_state = new State(
-         new Condition(0, act_concat, always)
+         new Condition(0, utils.act_concat, utils.always)
       );
       let select_state = new State(
          new Condition(0, (output, x, env) => {
-            act_concat(output, x, env);
+            utils.act_concat(output, x, env);
             env.stop_mark = x.token;
-         }, always, string_state)
+         }, utils.always, string_state)
       );
       select_state.register_condition(
-         new Condition(5, act_concat, (x, env) => {
-            return contains(['\'', '"', '-', '`'], x.token);
+         new Condition(5, utils.act_concat, (x, env) => {
+            return utils.contains(['\'', '"', '-', '`'], x.token);
          }, select_state)
       );
       this.register_state('ruby_heredoc_string', string_state);
@@ -287,17 +292,21 @@ class FeatureRubyHereDocString extends Feature {
          5, (output, x, env) => {
             output.push({
                token: '<<',
-               tag: 'S'
+               tag: TAG_STRING
             });
             return 2;
          }, (x, env) => {
-            if (env.input_i+1 >= env.input.length) return false;
-            return x.token === '<' && env.input[env.input_i+1].token === '<';
+            if (env.input_i+2 >= env.input.length) return false;
+            return (
+               x.token === '<' &&
+               env.input[env.input_i+1].token === '<' &&
+               !utils.contains([' ', '\t', '\n'], env.input[env.input_i+2].token)
+            );
          }, select_state
       ));
       string_state.register_condition(new Condition(
          5, (output, x, env) => {
-            act_concat(output, x, env);
+            utils.act_concat(output, x, env);
             env.stop_mark = null;
          }, (x, env) => {
             return env.stop_mark === x.token && env.input[env.input_i-1].token === '\n';
@@ -312,13 +321,13 @@ class FeatureRubyPercentString extends Feature {
    constructor() {
       super();
       let string_state = new State(
-         new Condition(0, act_concat, always)
+         new Condition(0, utils.act_concat, utils.always)
       );
       let string_escape_state = new State(
-         new Condition(0, act_concat, always, string_state)
+         new Condition(0, utils.act_concat, utils.always, string_state)
       );
       string_state.register_condition(
-         new Condition(5, act_concat, (x, env) => {
+         new Condition(5, utils.act_concat, (x, env) => {
             return env.stop_mark !== '\\' && x.token === '\\';
          }, string_escape_state)
       );
@@ -345,7 +354,7 @@ class FeatureRubyPercentString extends Feature {
             let token = '%' + env.flag + env.left_mark;
             output.push({
                token: token,
-               tag: 'S'
+               tag: TAG_STRING
             });
             env.deep = 1;
             switch(env.left_mark) {
@@ -361,11 +370,11 @@ class FeatureRubyPercentString extends Feature {
             let f1 = env.input[env.input_i+1];
             let f2 = env.input[env.input_i+2];
             if (!f1) return false;
-            if (contains(starter, f1.token)) {
+            if (utils.contains(starter, f1.token)) {
                env.left_mark = f1.token;
                env.flag = '';
                return true;
-            } else if (f2 && contains(flag, f1.token) && contains(starter, f2.token)) {
+            } else if (f2 && utils.contains(flag, f1.token) && utils.contains(starter, f2.token)) {
                env.left_mark = f2.token;
                env.flag = f1.token;
                return true;
@@ -375,7 +384,7 @@ class FeatureRubyPercentString extends Feature {
       ));
       string_state.register_condition(new Condition(
          5, (output, x, env) => {
-            act_concat(output, x, env);
+            utils.act_concat(output, x, env);
             delete env.deep;
             delete env.left_mark;
             env.stop_mark = null;
@@ -393,44 +402,6 @@ class FeatureRubyPercentString extends Feature {
       ));
       return feature;
    }
-}
-
-function act_concat(output, x, env) {
-   let m = last(output);
-   m.token += x.token;
-}
-
-function factory_text_cmp(expect, len) {
-   if (len === 1) {
-      return (x, env) => {
-         return text_cmp_1(expect, env.input, env.input_i);
-      }
-   } else {
-      return (x, env) => {
-         return text_cmp_n(expect, env.input, env.input_i, len);
-      }
-   }
-}
-
-function text_cmp_1(expect, input, index) {
-   return expect === input[index].token;
-}
-
-function text_cmp_n(expect, input, index, len) {
-   return expect === input.slice(
-      index, index + len).map((z) => z.token).join('');
-}
-
-function always() {
-   return true;
-}
-
-function last(array) {
-   return array[array.length - 1];
-}
-
-function contains(array, value) {
-   return array.indexOf(value) >= 0;
 }
 
 module.exports = {
