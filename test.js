@@ -1,29 +1,27 @@
 const fs = require('fs');
-const fsm = require('./parser/fsm');
+const path = require('path');
 const tokenizer = require('./parser/tokenizer');
 
 let filename = process.argv[2] || 'test.js';
+let ext = path.extname(filename);
 let text = fs.readFileSync(filename).toString();
-let tokens = new tokenizer.WordTokenizer().process(text);
+
+let tokens = null;
+switch (ext) {
+   case '.c':
+   case '.cc':
+   case '.cpp':
+   case '.h':
+   case '.hh':
+   case '.hpp':
+   case '.java': tokens = new tokenizer.CCTokenizer().process(text); break;
+   case '.js': tokens = new tokenizer.JavaScriptTokenizer().process(text); break;
+   case '.py': tokens = new tokenizer.PythonTokenizer().process(text); break;
+   case '.rb': tokens = new tokenizer.RubyTokenizer().process(text); break;
+   default: tokens = new tokenizer.WordTokenizer().process(text);
+}
 
 // test for common comment and string tokenizer
 /* define c style (multiple)' line comment */
-let parser = new fsm.FeatureRoot();
-let feature;
-feature = new fsm.FeatureCommonString(['\'', '"', '`']);
-//feature.merge_feature_as_python_doc_to(parser);
-feature.merge_feature_to(parser);
-feature = new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false);
-feature.merge_feature_to(parser);
-feature = new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true);
-feature.merge_feature_to(parser);
-//feature = new fsm.FeatureRubyHereDocString();
-//feature.merge_feature_to(parser);
-//feature = new fsm.FeatureRubyPercentString();
-//feature.merge_feature_to(parser);
-//feature = new fsm.FeatureCommonComment('ruby_style_line_comment', '#', '\n', false);
-//feature.merge_feature_to(parser);
-//feature = new fsm.FeatureCommonComment('ruby_multiline_comment', ['=', 'begin'], ['\n', '=', 'end'], true);
-//feature.merge_feature_to(parser);
-tokens = parser.process(tokens);
+
 console.log(JSON.stringify(tokens, null, 3));
