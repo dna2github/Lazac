@@ -1,6 +1,6 @@
 const utils = require('../utils');
 const fsm = require('./fsm');
-const parser_ruby = require('./ruby');
+const scope = require('./scope');
 
 class WordTokenizer {
    process(text) {
@@ -133,7 +133,7 @@ class RubyTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer(['_', '@']).process(tokens);
-      tokens = new parser_ruby.RubyScope().process(tokens);
+      tokens = new scope.RubyScope().process(tokens);
       return tokens;
    }
 }

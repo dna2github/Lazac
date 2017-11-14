@@ -309,7 +309,11 @@ class FeatureRubyHereDocString extends Feature {
             utils.act_concat(output, x, env);
             env.stop_mark = null;
          }, (x, env) => {
-            return env.stop_mark === x.token && env.input[env.input_i-1].token === '\n';
+            if (env.stop_mark === x.token) {
+               if (env.input_i >= env.input.length) return true;
+               return env.input[env.input_i+1].token === '\n';
+            }
+            return false;
          }, epsilon
       ));
       return feature;

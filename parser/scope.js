@@ -5,6 +5,7 @@ class RubyScope extends fsm.Feature {
    constructor () {
       super();
       this.env.block_stack = [];
+      this.env.last_non_space = null;
 
       let origin_state = new fsm.State(new fsm.Condition(
          0, (output, x, env) => {
@@ -13,7 +14,7 @@ class RubyScope extends fsm.Feature {
             case 'if':
             case 'until':
             case 'unless':
-               if (!utils.contains(['\n', '(', '{', '='], env.last_non_space)) {
+               if (!utils.contains([null, '\n', '(', '{', '<', '='], env.last_non_space)) {
                   break;
                }
             case 'while':
@@ -30,7 +31,7 @@ class RubyScope extends fsm.Feature {
                break;
             }
             if (x.token === '\n') {
-               if (env.input[env.input_i-1].token !== '\\') {
+               if (env.input[env.input_i-1] && env.input[env.input_i-1].token !== '\\') {
                   env.last_non_space = x.token;
                }
             } else if (!utils.contains([' ', '\t'], x.token)) {
@@ -55,7 +56,13 @@ class RubyScope extends fsm.Feature {
       function_scope_state.register_condition(new fsm.Condition(
          5, utils.act_push_origin, (x, env) => {
             if (utils.contains([' ', '\t', '\n'], x.token)) return false;
-            utils.last(env.block_stack).name = x.token;
+            let last = utils.last(env.block_stack);
+            if (x.token === '.') return false;
+            if (x.token === 'self') {
+               last.name = 'self.';
+               return false;
+            }
+            last.name = (last.name || '') + x.token;
             return true;
          }, origin_state
       ));
