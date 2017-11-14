@@ -14,7 +14,9 @@ class RubyScope extends fsm.Feature {
             case 'if':
             case 'until':
             case 'unless':
-               if (!utils.contains([null, '\n', '(', '{', '<', '='], env.last_non_space)) {
+               if (!utils.contains([
+                  null, '\n', '(', '{', '<', '>', '+', '-', '!', '&', '|', '^', '='
+               ], env.last_non_space)) {
                   break;
                }
             case 'while':
@@ -26,6 +28,9 @@ class RubyScope extends fsm.Feature {
                env.block_stack.push(x);
                break;
             case 'end':
+               if (env.input[env.input_i-1] && !utils.contains([' ', '\n', '\t', ';'], env.input[env.input_i-1].token)) {
+                  break;
+               }
                let block = env.block_stack.pop();
                block.endIndex = env.input_i;
                break;
@@ -46,6 +51,10 @@ class RubyScope extends fsm.Feature {
       origin_state.register_condition(new fsm.Condition(
          5, utils.act_push_origin, (x, env) => {
             if (utils.contains(['module', 'class', 'def'], x.token)) {
+               if (env.last_non_space === '.') {
+                  env.last_non_space = x.token;
+                  return false;
+               }
                env.block_stack.push(x);
                x.startIndex = env.input_i;
                return true;
@@ -55,15 +64,14 @@ class RubyScope extends fsm.Feature {
       ));
       function_scope_state.register_condition(new fsm.Condition(
          5, utils.act_push_origin, (x, env) => {
-            if (utils.contains([' ', '\t', '\n'], x.token)) return false;
             let last = utils.last(env.block_stack);
-            if (x.token === '.') return false;
-            if (x.token === 'self') {
-               last.name = 'self.';
-               return false;
+            if (!last.name && utils.contains([' ', '\t', '\n', '('], x.token)) return false;
+            if (utils.contains([' ', '\t', '\n', '(', ';'], x.token)) {
+               return true;
             }
             last.name = (last.name || '') + x.token;
-            return true;
+            if (last.name == '<<') last.name = ''; // e.g. class << self
+            return false;
          }, origin_state
       ));
       this.register_state('origin', origin_state);

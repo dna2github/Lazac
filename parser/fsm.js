@@ -1,7 +1,8 @@
 const utils = require('../utils');
 
 const TAG_STRING = 'string';
-const TAG_COMMENT = 'comment'
+const TAG_COMMENT = 'comment';
+const TAG_REGEX = 'regex';
 
 class Condition {
    constructor(priority, act, check, state) {
@@ -99,7 +100,7 @@ class FeatureRoot extends Feature {
          new Condition(0, (output, x, env) => {
             output.push({
                token: x.token,
-               tag: null
+               tag: x.tag
             });
          }, utils.always)
       );
@@ -194,6 +195,67 @@ class FeatureCommonString extends Feature {
       ));
       return feature;
    }
+
+   merge_feature_as_ruby_expandable_string_to(feature) {
+      // merge to feature root
+      // connect common_string to epsilon
+      if (this.state.ruby_expandable_string) return fature;
+      let expandable_state = new State(
+         new Condition(0, utils.act_concat, utils.always)
+      );
+      let string_state = this.state.common_string;
+      string_state.register_condition(new Condition(
+         5, (output, x, env) => {
+            utils.act_concat(output, x, env);
+            return 2;
+         }, (x, env) => {
+            if (x.token !== '#') return false;
+            if (env.input_i + 1 < env.input.length && env.input[env.input_i+1] == '{') return true;
+            return false;
+         }, expandable_state
+      ));
+      expandable_state.register_condition(new Condition(
+         5, utils.act_concat, (x, env) => {
+            return x.token === '}';
+         }, string_state
+      ));
+      this.register_state('ruby_expandable_string', expandable_state);
+      return this.merge_feature_to(feature);
+   }
+
+   merge_feature_as_regex(feature) {
+      // merge to feature root
+      // connect common_string to epsilon
+      if (!('epsilon' in feature.state)) return;
+      let epsilon = feature.state.epsilon;
+      let string_state = this.state.common_string;
+      epsilon.register_condition(new Condition(
+         5, (output, x, env) => {
+            output.push({
+               token: x.token,
+               tag: TAG_REGEX
+            });
+            env.stop_mark = x.token;
+         }, (x, env) => {
+            if (!utils.contains(this.marks, x.token)) return false;
+            for(let i = env.input_i-1; i >= 0; i--) {
+               if (utils.contains([' ', '\t'], env.input[i].token)) continue;
+               if (utils.contains(['=', '~', '!', '&', '|', '^', '[', '{', '<', '('], env.input[i].token)) return true;
+               return false;
+            }
+            return false;
+         }, string_state
+      ));
+      string_state.register_condition(new Condition(
+         5, (output, x, env) => {
+            utils.act_concat(output, x, env);
+            env.stop_mark = null;
+         }, (x, env) => {
+            return env.stop_mark === x.token;
+         }, epsilon
+      ));
+      return feature;
+   }
 }
 
 class FeatureCommonComment extends Feature {
@@ -256,6 +318,75 @@ class FeatureCommonComment extends Feature {
    }
 }
 
+class FeatureDolarSign extends Feature {
+   // e.g. $@, $0, $', $<
+   constructor(){
+      super();
+      this.set_entry(null);
+   }
+
+   merge_feature_to(feature) {
+      // merge to feature root
+      // connect common_string to epsilon
+      if (!('epsilon' in feature.state)) return;
+      let epsilon = feature.state.epsilon;
+      epsilon.register_condition(new Condition(
+         5, (output, x, env) => {
+            output.push({ token: x.token, tag: x.tag });
+            let next_token = env.input[env.input_i+1];
+            if (next_token) {
+               output.push({ token: next_token.token, tag: next_token.tag });
+               return 2;
+            } else {
+               return 1;
+            }
+         }, (x, env) => {
+            return x.token === '$';
+         }, epsilon
+      ));
+      return feature;
+   }
+}
+
+class FeatureRubyENDDoc extends Feature {
+   constructor() {
+      super();
+      let end_state = new State(
+         new Condition(0, utils.act_concat, utils.always)
+      );
+      this.register_state('ruby_end_doc', end_state);
+      this.set_entry(null);
+   }
+
+   merge_feature_to(feature) {
+      // merge to feature root
+      // connect common_string to epsilon
+      if (!('epsilon' in feature.state)) return;
+      let epsilon = feature.state.epsilon;
+      let end_state = this.state.ruby_end_doc;
+      epsilon.register_condition(new Condition(
+         5, (output, x, env) => {
+            output.pop(); // pop '_'
+            output.pop(); // pop '_'
+            output.push({
+               token: '__END__',
+               tag: TAG_COMMENT
+            });
+            return 3; // skip END__
+         }, (x, env) => {
+            if (x.token !== 'END') return false;
+            if (env.input_i < 2 || env.input_i + 2 >= env.input.length) return false;
+            if (env.input[env.input_i-2].token !== '_') return false;
+            if (env.input[env.input_i-1].token !== '_') return false;
+            if (env.input[env.input_i+1].token !== '_') return false;
+            if (env.input[env.input_i+2].token !== '_') return false;
+            return true;
+         }, end_state
+      ));
+      return feature;
+   }
+}
+
 class FeatureRubyHereDocString extends Feature {
    // e.g. <<-EOF
    //      hello world
@@ -296,12 +427,13 @@ class FeatureRubyHereDocString extends Feature {
             });
             return 2;
          }, (x, env) => {
+            if (x.token !== '<') return;
             if (env.input_i+2 >= env.input.length) return false;
-            return (
-               x.token === '<' &&
-               env.input[env.input_i+1].token === '<' &&
-               !utils.contains([' ', '\t', '\n'], env.input[env.input_i+2].token)
-            );
+            if (env.input[env.input_i+1].token !== '<') return false;
+            if (!utils.contains([
+               'EOF', '"', '\'', '`', '-'
+            ], env.input[env.input_i+2].token)) return false;
+            return true;
          }, select_state
       ));
       string_state.register_condition(new Condition(
@@ -415,6 +547,8 @@ module.exports = {
    FeatureRoot,
    FeatureCommonString,
    FeatureCommonComment,
+   FeatureDolarSign,
+   FeatureRubyENDDoc,
    FeatureRubyHereDocString,
    FeatureRubyPercentString
 };

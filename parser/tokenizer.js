@@ -35,7 +35,7 @@ class SymbolTokenizer {
       let output = [];
       let in_word = false;
       input.forEach((x) => {
-         if (utils.contains(this.connectors, x.token) || !utils.contains(utils.common_stops, x.token)) {
+         if (!x.tag && (utils.contains(this.connectors, x.token) || !utils.contains(utils.common_stops, x.token))) {
             if (in_word) {
                utils.last(output).token += x.token;
             } else {
@@ -117,12 +117,15 @@ class PythonTokenizer {
 class RubyTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
+      new fsm.FeatureCommonString(['\'', '"', '`']).merge_feature_as_ruby_expandable_string_to(this.parser);
+      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser);
       this.features = [
-         new fsm.FeatureCommonString(['\'', '"', '`']),
          new fsm.FeatureCommonComment('ruby_style_line_comment', '#', '\n', false),
          new fsm.FeatureRubyHereDocString(),
          new fsm.FeatureRubyPercentString(),
-         new fsm.FeatureCommonComment('ruby_multiline_comment', ['=', 'begin'], ['\n', '=', 'end'], true)
+         new fsm.FeatureDolarSign(),
+         new fsm.FeatureCommonComment('ruby_multiline_comment', ['=', 'begin'], ['\n', '=', 'end'], true),
+         new fsm.FeatureRubyENDDoc()
       ];
       this.features.forEach((f) => {
          f.merge_feature_to(this.parser);
