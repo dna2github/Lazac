@@ -5,6 +5,11 @@ const common_stops = [
    '"', '\'', ',', '.', '<', '>', '/', '?', ' ', '\t', '\r', '\n'
 ];
 
+const TAG_STRING = 'string';
+const TAG_COMMENT = 'comment';
+const TAG_REGEX = 'regex';
+const TAG_INDENT = 'indent';
+
 function act_concat(output, x, env) {
    let m = last(output);
    m.token += x.token;
@@ -39,8 +44,23 @@ function always() {
    return true;
 }
 
-function last(array) {
-   return array[array.length - 1];
+function arrindex(array, index, key) {
+   let obj = array[index];
+   if (!obj) return null;
+   if (key) return obj[key];
+   return obj;
+}
+
+function last(array, key) {
+   return arrindex(array, array.length-1, key);
+}
+
+function next(array, index, key) {
+   return arrindex(array, index+1, key);
+}
+
+function prev(array, index, key) {
+   return arrindex(array, index-1, key);
 }
 
 function contains(array, value) {
@@ -48,6 +68,10 @@ function contains(array, value) {
 }
 
 module.exports = {
+   TAG_STRING,
+   TAG_COMMENT,
+   TAG_REGEX,
+   TAG_INDENT,
    common_stops,
    act_concat,
    act_push_origin,
@@ -55,6 +79,9 @@ module.exports = {
    text_cmp_1,
    text_cmp_n,
    always,
+   arrindex,
    last,
+   next,
+   prev,
    contains
 };

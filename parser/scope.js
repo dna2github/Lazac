@@ -28,7 +28,7 @@ class RubyScope extends fsm.Feature {
                env.block_stack.push(x);
                break;
             case 'end':
-               if (env.input[env.input_i-1] && !utils.contains([' ', '\n', '\t', ';'], env.input[env.input_i-1].token)) {
+               if (!utils.contains([' ', '\n', '\t', ';'], utils.prev(env.input, env.input_i, 'token'))) {
                   break;
                }
                let block = env.block_stack.pop();
@@ -36,7 +36,7 @@ class RubyScope extends fsm.Feature {
                break;
             }
             if (x.token === '\n') {
-               if (env.input[env.input_i-1] && env.input[env.input_i-1].token !== '\\') {
+               if (utils.prev(env.input, env.input_i, 'token') !== '\\') {
                   env.last_non_space = x.token;
                }
             } else if (!utils.contains([' ', '\t'], x.token)) {
@@ -80,6 +80,273 @@ class RubyScope extends fsm.Feature {
    }
 }
 
+class PythonLambdaScope extends fsm.Feature {
+   constructor() {
+      super();
+      this.env.lambda_stack = [];
+      this.env.bracket_stack = [];
+      let origin_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            env.lambda_stack.push(x);
+            x.startIndex = output.length-1;
+            x.bracketDeepth = env.bracket_stack.length;
+         }, (x, env) => x.token === 'lambda', origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (!utils.contains(['(', '{', '['], x.token)) return false;
+            switch(x.token) {
+            case '(': env.bracket_stack.push(')'); break;
+            case '{': env.bracket_stack.push('}'); break;
+            case '[': env.bracket_stack.push(']'); break;
+            }
+            return true;
+         }, origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            env.bracket_stack.pop();
+            let lambda = utils.last(env.lambda_stack);
+            while (lambda && lambda.bracketDeepth > env.bracket_stack.length) {
+               lambda = env.lambda_stack.pop();
+               delete lambda.bracketDeepth;
+               delete lambda.colon;
+               lambda.endIndex = output.length-2;
+               lambda = utils.last(env.lambda_stack);
+            }
+         }, (x, env) => {
+            return x.token === utils.last(env.bracket_stack);
+         }, origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (!env.lambda_stack.length) return false;
+            if (x.token !== ':') return false;
+            utils.last(env.lambda_stack).colon = true;
+            return true;
+         }, origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            let lambda = env.lambda_stack.pop();
+            delete lambda.bracketDeepth;
+            delete lambda.colon;
+            lambda.endIndex = output.length-2;
+         }, (x, env) => {
+            if (!utils.last(env.lambda_stack, 'colon')) return false;
+            if (env.bracket_stack.length > utils.last(env.lambda_stack, 'bracketDeepth')) return false;
+            if (!utils.contains([',', '\n', ';'], x.token)) return false;
+            return true;
+         }, origin_state
+      ));
+      this.register_state('origin', origin_state);
+      this.set_entry('origin');
+   }
+}
+
+class PythonScope extends fsm.Feature {
+   constructor () {
+      super();
+      this.env.block_stack = [];
+      this.env.bracket_stack = [];
+      this.env.line_start = true;
+      this.env.indent_size = 0;
+      this.env.annotation_start = null;
+      this.env.named_block = null;
+      let origin_state = new fsm.State(new fsm.Condition(
+         0, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            if (env.line_start) {
+               env.line_start = false;
+               if (x.tag === utils.TAG_STRING && utils.next(env.input, env.input_i, 'token') === '\n') {
+                  x.tag = utils.TAG_COMMENT;
+               }
+               if (x.tag === utils.TAG_COMMENT || x.token === '\n') {
+               } else if (env.indent_size <= utils.last(env.block_stack, 'indentSize')) {
+                  let indent_size = utils.last(env.block_stack, 'indentSize') || 0;
+                  while (env.indent_size < indent_size) {
+                     let block = env.block_stack.pop();
+                     block.endIndex = output.length-2;
+                  }
+                  if (
+                     env.indent_size === indent_size &&
+                     env.block_stack.length > 0 &&
+                     !utils.contains(['elif', 'else', 'except', 'finally'], x.token)
+                  ) {
+                     let block = env.block_stack.pop();
+                     block.endIndex = output.length-2;
+                  }
+               }
+               if (utils.contains([
+                  'class', 'def', 'while', 'with', 'for', 'try', 'if'
+               ], x.token)) {
+                  if (utils.contains(['class', 'def'], x.token)) {
+                     env.named_block = x;
+                     x.name = '';
+                  }
+                  env.block_stack.push(x);
+                  x.indentSize = env.indent_size;
+                  if (env.annotation_start !== null) {
+                     x.startIndex = env.annotation_start;
+                     env.annotation_start = null;
+                  } else {
+                     x.startIndex = output.length-1;
+                  }
+                  if (utils.prev(output, x.startIndex, 'tag') === utils.TAG_INDENT) {
+                     x.startIndex --;
+                  }
+               }
+               env.indent_size = 0;
+            } else if (env.named_block) {
+               if (utils.contains([' ', '\t'], x.token)) {
+               } else {
+                  env.named_block.name += x.token;
+                  if (utils.contains(
+                     [' ', '\t', '(', ':'], utils.next(env.input, env.input_i, 'token'))
+                  ) {
+                     env.named_block = null;
+                  }
+               }
+            }
+            if (x.token === '\n') {
+               env.line_start = true;
+            }
+            if (env.input_i >= env.input.length-1) {
+               while(env.block_stack.length) {
+                  let block = env.block_stack.pop();
+                  block.endIndex = output.length-1;
+               }
+            }
+         }, utils.always
+      ));
+      let indent_state = new fsm.State(new fsm.Condition(
+         0, (output, x, env) => {
+            utils.act_concat(output, x, env);
+            env.indent_size += x.token==='\t'?8:1;
+         }, utils.always
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            env.indent_size = x.token==='\t'?8:1;
+            output.push({
+               token: x.token,
+               tag: utils.TAG_INDENT
+            });
+         }, (x, env) => {
+            return (env.line_start && utils.contains([' ', '\t'], x.token));
+         }, indent_state
+      ));
+      indent_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_concat(output, x, env);
+            env.indent_size += x.token==='\t'?8:1;
+            if (env.input_i >= env.input.length-1) {
+               while(env.block_stack.length) {
+                  let block = env.block_stack.pop();
+                  block.endIndex = output.length-1;
+               }
+            }
+         }, (x, env) => {
+            return !utils.contains([' ', '\t'], utils.next(env.input, env.input_i, 'token'));
+         }, origin_state
+      ));
+
+      let annotation_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            if (env.annotation_start === null) {
+               env.annotation_start = output.length-1;
+            }
+         }, (x, env) => x.token === '@', annotation_state
+      ));
+      annotation_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => x.token === '\n', origin_state
+      ));
+
+      let bracket_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            switch (x.token) {
+            case '(': env.bracket_stack.push(')'); break;
+            case '[': env.bracket_stack.push(']'); break;
+            case '{': env.bracket_stack.push('}'); break;
+            }
+         }, (x, env) => utils.contains(['(', '[', '{'], x.token), bracket_state
+      ));
+      bracket_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (utils.contains(['(', '[', '{'], x.token)) {
+               switch (x.token) {
+               case '(': env.bracket_stack.push(')'); break;
+               case '[': env.bracket_stack.push(']'); break;
+               case '{': env.bracket_stack.push('}'); break;
+               }
+               return true;
+            }
+            return false;
+         }, bracket_state
+      ));
+      bracket_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (utils.last(env.bracket_stack) === x.token) {
+               env.bracket_stack.pop();
+            }
+            return env.bracket_stack.length === 0;
+         }, origin_state
+      ));
+
+      let annotation_bracket_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      // deal with         @annotation(
+      // multiple line         "hello", "world")
+      annotation_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            env.bracket_stack.push(')');
+         }, (x, env) => x.token === '(', annotation_bracket_state
+      ));
+      annotation_bracket_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (x.token === '(') {
+               env.bracket_stack.push(')');
+               return true;
+            }
+            return false;
+         }, annotation_bracket_state
+      ));
+      annotation_bracket_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (utils.last(env.bracket_stack) === x.token) {
+               env.bracket_stack.pop();
+            }
+            return env.bracket_stack.length === 0;
+         }, annotation_state
+      ));
+
+      this.register_state('origin', origin_state);
+      this.register_state('indent', indent_state);
+      this.register_state('annotation', annotation_state);
+      this.register_state('annotation_bracket', annotation_bracket_state);
+      this.register_state('bracket', bracket_state);
+      this.set_entry('origin');
+   }
+}
+
 module.exports = {
-   RubyScope
+   RubyScope,
+   PythonLambdaScope,
+   PythonScope
 };

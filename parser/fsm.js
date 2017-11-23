@@ -1,9 +1,5 @@
 const utils = require('../utils');
 
-const TAG_STRING = 'string';
-const TAG_COMMENT = 'comment';
-const TAG_REGEX = 'regex';
-
 class Condition {
    constructor(priority, act, check, state) {
       this.priority = priority;
@@ -140,7 +136,7 @@ class FeatureCommonString extends Feature {
          5, (output, x, env) => {
             output.push({
                token: x.token,
-               tag: TAG_STRING
+               tag: utils.TAG_STRING
             });
             env.stop_mark = x.token;
          }, (x, env) => {
@@ -170,7 +166,7 @@ class FeatureCommonString extends Feature {
             let punc = x.token.repeat(3);
             output.push({
                token: punc,
-               tag: TAG_STRING
+               tag: utils.TAG_STRING
             });
             env.stop_mark = punc;
             return 3;
@@ -233,7 +229,7 @@ class FeatureCommonString extends Feature {
          5, (output, x, env) => {
             output.push({
                token: x.token,
-               tag: TAG_REGEX
+               tag: utils.TAG_REGEX
             });
             env.stop_mark = x.token;
          }, (x, env) => {
@@ -283,7 +279,7 @@ class FeatureCommonComment extends Feature {
          this.env.end = end;
       }
       this.env.include_end = include_end;
-      this.env.tag = tag || TAG_COMMENT;
+      this.env.tag = tag || utils.TAG_COMMENT;
    }
 
    merge_feature_to(feature) {
@@ -370,7 +366,7 @@ class FeatureRubyENDDoc extends Feature {
             output.pop(); // pop '_'
             output.push({
                token: '__END__',
-               tag: TAG_COMMENT
+               tag: utils.TAG_COMMENT
             });
             return 3; // skip END__
          }, (x, env) => {
@@ -423,7 +419,7 @@ class FeatureRubyHereDocString extends Feature {
          5, (output, x, env) => {
             output.push({
                token: '<<',
-               tag: TAG_STRING
+               tag: utils.TAG_STRING
             });
             return 2;
          }, (x, env) => {
@@ -490,7 +486,7 @@ class FeatureRubyPercentString extends Feature {
             let token = '%' + env.flag + env.left_mark;
             output.push({
                token: token,
-               tag: TAG_STRING
+               tag: utils.TAG_STRING
             });
             env.deep = 1;
             switch(env.left_mark) {

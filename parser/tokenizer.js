@@ -100,16 +100,18 @@ class PythonTokenizer {
          new fsm.FeatureCommonString(['\'', '"']),
          new fsm.FeatureCommonComment('python_style_line_comment', '#', '\n', false)
       ];
+      this.features[0].merge_feature_as_python_doc_to(this.parser);
       this.features.forEach((f) => {
          f.merge_feature_to(this.parser);
       });
-      f[0].merge_feature_as_python_doc_to(this.parser);
    }
 
    process(text) {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.PythonLambdaScope().process(tokens);
+      tokens = new scope.PythonScope().process(tokens);
       return tokens;
    }
 }
