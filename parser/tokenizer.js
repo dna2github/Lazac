@@ -75,6 +75,7 @@ class CCTokenizer {
 class JavaScriptTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
+      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser, ['return']);
       this.features = [
          new fsm.FeatureCommonString(['\'', '"', '`']),
          new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false),
@@ -120,7 +121,9 @@ class RubyTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
       new fsm.FeatureCommonString(['\'', '"', '`']).merge_feature_as_ruby_expandable_string_to(this.parser);
-      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser);
+      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(
+         this.parser, ['return', 'if', 'while', 'until', 'unless', 'while', 'else', 'elsif']
+      );
       this.features = [
          new fsm.FeatureCommonComment('ruby_style_line_comment', '#', '\n', false),
          new fsm.FeatureRubyHereDocString(),

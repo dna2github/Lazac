@@ -70,9 +70,10 @@ class Feature {
 
    process(input) {
       // input = [ { token: characters, tag: name } ]
-      this.env.input = input;
       let output = [];
       let cursor = this.state[this.entry];
+      this.env.input = input;
+      this.env.output = output;
       for(let i = 0, n = input.length; i < n; ++i ) {
          let x = input[i];
          this.env.input_i = i;
@@ -85,6 +86,7 @@ class Feature {
       }
       delete this.env.input;
       delete this.env.input_i;
+      delete this.env.output;
       return output;
    }
 }
@@ -219,10 +221,11 @@ class FeatureCommonString extends Feature {
       return this.merge_feature_to(feature);
    }
 
-   merge_feature_as_regex(feature) {
+   merge_feature_as_regex(feature, keywords) {
       // merge to feature root
       // connect common_string to epsilon
       if (!('epsilon' in feature.state)) return;
+      let regex_can_follow_keywords = keywords || [];
       let epsilon = feature.state.epsilon;
       let string_state = this.state.common_string;
       epsilon.register_condition(new Condition(
@@ -234,11 +237,30 @@ class FeatureCommonString extends Feature {
             env.stop_mark = x.token;
          }, (x, env) => {
             if (!utils.contains(this.marks, x.token)) return false;
-            for(let i = env.input_i-1; i >= 0; i--) {
-               if (utils.contains([' ', '\t'], env.input[i].token)) continue;
-               if (utils.contains(['=', '~', '!', '&', '|', '^', '[', '{', '<', '('], env.input[i].token)) return true;
-               return false;
+            let p = -1;
+            let search_options = { skip: [' ', '\t'], key: 'token' };
+            for(let i = env.input_i+1, n = env.input.length; i <= n; i++) {
+               if (env.input[i].token === '\\') {
+                  i ++; continue;
+               }
+               if (env.input[i].token === '\n') return false;
+               if (env.input[i].token === '/') {
+                  p = utils.search_next(env.input, i+1, search_options);
+                  break;
+               }
             }
+            if (p === -1) return false;
+            p = env.input[p];
+            if (p.token === '\n' || p.token === ')') return true;
+            if (!utils.contains(['.', ';', ','], p.token)) return false;
+            p = utils.search_prev(env.output, env.output.length-1, search_options);
+            while (p >= 0 && env.output[p].tag === utils.TAG_COMMENT) {
+               p = utils.search_prev(env.output, p-1, search_options);
+            }
+            if (p === -1) return true; // SOF/test/.test('test')
+            p = env.output[p];
+            if (utils.contains(utils.common_stops, p.token)) return true;
+            if (utils.contains(regex_can_follow_keywords, p.token)) return true;
             return false;
          }, string_state
       ));

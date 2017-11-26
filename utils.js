@@ -63,6 +63,61 @@ function prev(array, index, key) {
    return arrindex(array, index-1, key);
 }
 
+function search_prev(array, index, options) {
+   if (!options) options = {};
+   let skip = options.skip;
+   let stop = options.stop;
+   let key = options.key;
+   if (skip) {
+      while (index >= 0) {
+         let value = array[index];
+         if (key) value = value[key];
+         if (contains(skip, value)) {
+            index --;
+         }
+         return index;
+      }
+   } else if(stop) {
+      while (index >= 0) {
+         let value = array[index];
+         if (key) value = value[key];
+         if (contains(stop, value)) {
+            return index;
+         }
+         index --;
+      }
+   }
+   return -1;
+}
+
+function search_next(array, index, options) {
+   if (!options) options = {};
+   let skip = options.skip;
+   let stop = options.stop;
+   let key = options.key;
+   let n = array.length;
+   if (skip) {
+      while (index < n) {
+         let value = array[index];
+         if (key) value = value[key];
+         if (contains(skip, value)) {
+            index ++;
+         }
+         return index;
+      }
+   } else if(stop) {
+      while (index < n) {
+         let value = array[index];
+         if (key) value = value[key];
+         if (contains(stop, value)) {
+            return index;
+         }
+         index ++;
+      }
+   }
+   return -1;
+}
+
 function contains(array, value) {
    return array.indexOf(value) >= 0;
 }
@@ -83,5 +138,7 @@ module.exports = {
    last,
    next,
    prev,
+   search_prev,
+   search_next,
    contains
 };
