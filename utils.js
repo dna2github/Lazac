@@ -10,13 +10,23 @@ const TAG_COMMENT = 'comment';
 const TAG_REGEX = 'regex';
 const TAG_INDENT = 'indent';
 
-function act_concat(output, x, env) {
+const SEARCH_SKIPSPACE = { skip: [' ', '\t'], key: 'token' };
+const SEARCH_SKIPSPACEN = { skip: [' ', '\t', '\n'], key: 'token' };
+
+function act_concat(output, x) {
    let m = last(output);
    m.token += x.token;
 }
 
-function act_push_origin (output, x, env) {
+function act_push_origin (output, x) {
    output.push(x);
+}
+
+function act_push_origin_range (output, input, start, end) {
+   for (let i = start; i <= end; i++) {
+      output.push(input[i]);
+   }
+   return end - start + 1;
 }
 
 function factory_text_cmp(expect, len) {
@@ -102,6 +112,7 @@ function search_next(array, index, options) {
          if (key) value = value[key];
          if (contains(skip, value)) {
             index ++;
+            continue;
          }
          return index;
       }
@@ -127,6 +138,8 @@ module.exports = {
    TAG_COMMENT,
    TAG_REGEX,
    TAG_INDENT,
+   SEARCH_SKIPSPACE,
+   SEARCH_SKIPSPACEN,
    common_stops,
    act_concat,
    act_push_origin,
@@ -134,7 +147,7 @@ module.exports = {
    text_cmp_1,
    text_cmp_n,
    always,
-   arrindex,
+   index: arrindex,
    last,
    next,
    prev,

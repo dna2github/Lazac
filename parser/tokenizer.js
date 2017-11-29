@@ -68,6 +68,7 @@ class CCTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
       return tokens;
    }
 }
@@ -90,6 +91,8 @@ class JavaScriptTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
+      tokens = new scope.JavaScriptScope().process(tokens);
       return tokens;
    }
 }
