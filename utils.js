@@ -11,7 +11,7 @@ const TAG_REGEX = 'regex';
 const TAG_INDENT = 'indent';
 
 const SEARCH_SKIPSPACE = { skip: [' ', '\t'], key: 'token' };
-const SEARCH_SKIPSPACEN = { skip: [' ', '\t', '\n'], key: 'token' };
+const SEARCH_SKIPSPACEN = { skip: [' ', '\t', '\n', '\r'], key: 'token' };
 
 function act_concat(output, x) {
    let m = last(output);
@@ -42,10 +42,21 @@ function factory_text_cmp(expect, len) {
 }
 
 function text_cmp_1(expect, input, index) {
+   if (Array.isArray(expect)) {
+      for(let i = 0, n = expect.length; i < n; i++) {
+         if (expect[i] === input[index].token) return true;
+      }
+   }
    return expect === input[index].token;
 }
 
 function text_cmp_n(expect, input, index, len) {
+   if (Array.isArray(expect)) {
+      for(let i = 0, n = expect.length; i < n; i++) {
+         if (expect[i] === input.slice(
+            index, index+len).map((z) => z.token).join('')) return true;
+      }
+   }
    return expect === input.slice(
       index, index + len).map((z) => z.token).join('');
 }

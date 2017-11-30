@@ -310,6 +310,15 @@ class FeatureCommonComment extends Feature {
       this.env.tag = tag || utils.TAG_COMMENT;
    }
 
+   set_flag_n_eq_r() {
+      if (this.env.end.charAt(0) === '\n') {
+         this.env.end = [this.env.end, '\r' + this.env.end.substring(1)];
+      } else if (this.env.end.charAt(0) === '\r') {
+         this.env.end = [this.env.end, '\n' + this.env.end.substring(1)];
+      }
+      return this;
+   }
+
    merge_feature_to(feature) {
       // merge to feature root
       // connect common_string to epsilon

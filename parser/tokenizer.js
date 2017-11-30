@@ -51,12 +51,12 @@ class SymbolTokenizer {
    }
 }
 
-class CCTokenizer {
+class CTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
       this.features = [
          new fsm.FeatureCommonString(['\'', '"']),
-         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
          new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true)
       ];
       this.features.forEach((f) => {
@@ -73,13 +73,12 @@ class CCTokenizer {
    }
 }
 
-class JavaScriptTokenizer {
+class JavaTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
-      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser, ['return']);
       this.features = [
-         new fsm.FeatureCommonString(['\'', '"', '`']),
-         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false),
+         new fsm.FeatureCommonString(['\'', '"']),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
          new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true)
       ];
       this.features.forEach((f) => {
@@ -91,6 +90,31 @@ class JavaScriptTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
+      tokens = new scope.JavaScope().process(tokens);
+      return tokens;
+   }
+}
+
+class JavaScriptTokenizer {
+   constructor() {
+      this.parser = new fsm.FeatureRoot();
+      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser, ['return']);
+      this.features = [
+         new fsm.FeatureCommonString(['\'', '"', '`']),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
+         new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true)
+      ];
+      this.features.forEach((f) => {
+         f.merge_feature_to(this.parser);
+      });
+   }
+
+   process(text) {
+      let input = new WordTokenizer().process(text);
+      let tokens = this.parser.process(input);
+      tokens = new SymbolTokenizer().process(tokens);
+      console.log(JSON.stringify(tokens, null, 3));
       tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.JavaScriptScope().process(tokens);
       return tokens;
@@ -102,7 +126,7 @@ class PythonTokenizer {
       this.parser = new fsm.FeatureRoot();
       this.features = [
          new fsm.FeatureCommonString(['\'', '"']),
-         new fsm.FeatureCommonComment('python_style_line_comment', '#', '\n', false)
+         new fsm.FeatureCommonComment('python_style_line_comment', '#', '\n', false).set_flag_n_eq_r()
       ];
       this.features[0].merge_feature_as_python_doc_to(this.parser);
       this.features.forEach((f) => {
@@ -128,11 +152,11 @@ class RubyTokenizer {
          this.parser, ['return', 'if', 'while', 'until', 'unless', 'while', 'else', 'elsif']
       );
       this.features = [
-         new fsm.FeatureCommonComment('ruby_style_line_comment', '#', '\n', false),
+         new fsm.FeatureCommonComment('ruby_style_line_comment', '#', '\n', false).set_flag_n_eq_r(),
          new fsm.FeatureRubyHereDocString(),
          new fsm.FeatureRubyPercentString(),
          new fsm.FeatureDolarSign(),
-         new fsm.FeatureCommonComment('ruby_multiline_comment', ['=', 'begin'], ['\n', '=', 'end'], true),
+         new fsm.FeatureCommonComment('ruby_multiline_comment', ['=', 'begin'], ['\n', '=', 'end'], true).set_flag_n_eq_r(),
          new fsm.FeatureRubyENDDoc()
       ];
       this.features.forEach((f) => {
@@ -152,7 +176,8 @@ class RubyTokenizer {
 module.exports = {
    WordTokenizer,
    SymbolTokenizer,
-   CCTokenizer,
+   CTokenizer,
+   JavaTokenizer,
    PythonTokenizer,
    JavaScriptTokenizer,
    RubyTokenizer
