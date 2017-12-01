@@ -69,6 +69,56 @@ class CTokenizer {
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
       tokens = new scope.BracketScope().process(tokens);
+      // tokens = new scope.CPrecompileScope().process(tokens);
+      tokens = new scope.CScope().process(tokens);
+      return tokens;
+   }
+}
+
+class ObjectiveCTokenizer {
+   constructor() {
+      this.parser = new fsm.FeatureRoot();
+      this.features = [
+         new fsm.FeatureCommonString(['\'', '"']),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
+         new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true)
+      ];
+      this.features.forEach((f) => {
+         f.merge_feature_to(this.parser);
+      });
+   }
+
+   process(text) {
+      let input = new WordTokenizer().process(text);
+      let tokens = this.parser.process(input);
+      tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
+      // tokens = new scope.CPrecompileScope().process(tokens);
+      tokens = new scope.ObjectiveCScope().process(tokens);
+      return tokens;
+   }
+}
+
+class GoTokenizer {
+   constructor() {
+      this.parser = new fsm.FeatureRoot();
+      this.features = [
+         new fsm.FeatureCommonString(['\'', '"', '`']),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
+         new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true)
+      ];
+      this.features.forEach((f) => {
+         f.merge_feature_to(this.parser);
+      });
+   }
+
+   process(text) {
+      let input = new WordTokenizer().process(text);
+      let tokens = this.parser.process(input);
+      tokens = new SymbolTokenizer().process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
+      // tokens = new scope.CPrecompileScope().process(tokens);
+      tokens = new scope.GoScope().process(tokens);
       return tokens;
    }
 }
@@ -92,6 +142,38 @@ class JavaTokenizer {
       tokens = new SymbolTokenizer().process(tokens);
       tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.JavaScope().process(tokens);
+      return tokens;
+   }
+}
+
+class CsharpTokenizer {
+   constructor() {
+      this.parser = new fsm.FeatureRoot();
+      this.features = [
+         new fsm.FeatureCommonString(['\'', '"']),
+         new fsm.FeatureCommonComment('csharp_raw_string', '@"'.split(''), '"', true, utils.TAG_STRING).set_flag_n_eq_r(),
+         new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
+         new fsm.FeatureCommonComment('c_style_multiline_comment', '/*'.split(''), '*/'.split(''), true),
+         new fsm.FeatureInvisible(
+            [
+               ['#', 'region'], ['#', 'endregion'], ['#', 'define'], ['#', 'if'], ['#', 'else'],
+               ['#', 'elif'], ['#', 'endif'], ['#', 'line'], ['#', 'error'], ['#', 'warning'], ['#', 'undef']
+            ], [['\n'], ['\r']]
+         )
+      ];
+      this.features.forEach((f) => {
+         f.merge_feature_to(this.parser);
+      });
+   }
+
+   process(text) {
+      let input = new WordTokenizer().process(text);
+      let tokens = this.parser.process(input);
+      // declare symbol with @name -> (usage) like @if -> (@if), @a -> (a, @a)
+      tokens = new SymbolTokenizer(['_', '@', '#']).process(tokens);
+      // csharp use [] for attribute (annotation), e.g. [Condition("DEBUG")]
+      tokens = new scope.BracketScope({'(': ')', '{': '}', '[': ']'}).process(tokens);
+      tokens = new scope.CsharpScope().process(tokens);
       return tokens;
    }
 }
@@ -177,7 +259,10 @@ module.exports = {
    WordTokenizer,
    SymbolTokenizer,
    CTokenizer,
+   ObjectiveCTokenizer,
    JavaTokenizer,
+   CsharpTokenizer,
+   GoTokenizer,
    PythonTokenizer,
    JavaScriptTokenizer,
    RubyTokenizer

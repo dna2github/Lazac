@@ -436,7 +436,6 @@ class CLikeScope extends fsm.Feature {
                x.parent.endIndex = x.endIndex;
                delete x.parent;
                clear_bracket_attr(x);
-            } else {
             }
          }, (x, env) => utils.contains(['if', 'switch', 'while', 'for', 'catch'], x.token), origin_state
       ));
@@ -710,6 +709,8 @@ class JavaScope extends CLikeScope {
                return;
             }
             if (p >= 0 && env.input[p].token === ';') {
+               // e.g. interface X { int a(); },
+               // however function call +a.test(1,2); match, process later
                x.endIndex = p;
             } else if (env.input[p].token !== '{') {
                // standalone or function call
@@ -732,10 +733,19 @@ class JavaScope extends CLikeScope {
             p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
             p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             // e.g. int[][][]
-            while (p >= 0 && env.input[p].token === ']') {
-               p = utils.search_prev(env.input, p-1, { key: 'token', stop:['['] });
-               p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === ']') {
+               while (p >= 0 && env.input[p].token === ']') {
+                  p = utils.search_prev(env.input, p-1, { key: 'token', stop:['['] });
+                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               }
+            // function call +test(1,2); a[0].test(1,2); ...
+            } else if (p >= 0 && utils.contains(utils.common_stops, env.input[p].token)) {
+               clear_bracket_attr(x);
+               return;
+            } else if (p >= 0 && utils.contains(['return', 'new'], env.input[p].token)) {
+               clear_bracket_attr(x);
+               return;
             }
             //                /-- q
             //               v  v-- p
@@ -760,12 +770,12 @@ class JavaScope extends CLikeScope {
                }
                p = q;
                q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_next_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
             }
             if (q >= 0 && env.input[q].token === 'static') {
                p = q;
                q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_next_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
             }
             if (q >= 0 && utils.contains(['public', 'private', 'protected'], env.input[q].token)) {
                p = q;
@@ -813,34 +823,28 @@ class JavaScope extends CLikeScope {
                p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
                p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
-            if (p >= 0 && env.input[p].token === ';') {
-               // interface define abstract functions
-               // e.g. int test();
-               ed = p;
-            } else {
-               // should have { ... } for body
-               p = utils.search_next(env.input, p, { key: 'token', stop: ['{'] });
-               ed = env.input[p].endIndex;
-               clear_bracket_attr(env.input[p]);
-            }
+            // should have { ... } for body
+            p = utils.search_next(env.input, p, { key: 'token', stop: ['{'] });
+            ed = env.input[p].endIndex;
+            clear_bracket_attr(env.input[p]);
             //                                               <-- search back
-            // [public/private/protected] [static] [abstract] [@]interface/class ...
+            // [public/private/protected] [static] [abstract] [@]X ...
             if (utils.prev(env.input, st, 'token') === '@') {
                // no @class, thus only @interface
                p = utils.search_prev(env.input, st-2, utils.SEARCH_SKIPSPACEN);
             } else {
                p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
             }
-            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             if (p >= 0 && env.input[p].token === 'abstract') {
                st = p;
                p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
             if (p >= 0 && env.input[p].token === 'static') {
                st = p;
                p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
             if (p >= 0 && utils.contains(['public', 'private', 'protected'], env.input[p].token)) {
                st = p;
@@ -854,11 +858,380 @@ class JavaScope extends CLikeScope {
                env.input[st].endIndex = ed;
                env.input[st].name = name;
             }
-         }, (x, env) => utils.contains(['class', 'interface'], x.token), origin_state
+         }, (x, env) => utils.contains(['class', 'interface', 'enum'], x.token), origin_state
+      ));
+      // standalone block
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            clear_bracket_attr(x);
+         }, (x, env) => x.token === '{' && x.startIndex >= 0, origin_state
+      ));
+
+      function detect_end_of_statement(input, index, env, extra_check_fn) {
+         let i, n, ch;
+         for (i = index, n = input.length; i < n; i++) {
+            ch = input[i];
+            if (ch.token === ';') return i;
+            if (ch.startIndex >= 0) {
+               // skip ( ... ), { ... }
+               i = ch.endIndex;
+               continue;
+            } else if (extra_check_fn && extra_check_fn(input, i, ch, env)) {
+               return i-1;
+            }
+         }
+         // should not be here
+         return i-1;
+      }
+   }
+}
+
+class CsharpScope extends CLikeScope {
+   constructor() {
+      // after BracketScope
+      super(detect_end_of_statement);
+      let origin_state = this.state.origin;
+      // add foreach
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p = env.input_i+1, q;
+            x.startIndex = env.input_i;
+            p = utils.search_next(env.input, p, { key: 'token', stop: ['('] });
+            q = env.input[p].endIndex;
+            p = utils.search_next(env.input, q+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === '{') {
+               x.endIndex = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+            } else {
+               x.endIndex = detect_end_of_statement(env.input, p, env);
+            }
+         }, (x, env) => x.token === 'foreach', origin_state
+      ));
+      // override catch
+      origin_state.register_condition(new fsm.Condition(
+         4, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p = env.input_i+1, q;
+            x.startIndex = env.input_i;
+            q = x.startIndex;
+            p = utils.search_next(env.input, q+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === '(') {
+               q = env.input[p].endIndex;
+               p = utils.search_next(env.input, q+1, utils.SEARCH_SKIPSPACEN);
+               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               if (p >= 0 && env.input[p].token === 'when') {
+                  // catch (HttpRequestException e) when (e.Message.Contains("301")) { ... }
+                  p = utils.search_next(env.input, q+1, { key: 'token', stop: ['{'] });
+               }
+            } // else: catch { ... }
+            if (p >= 0 && env.input[p].token === '{') {
+               x.endIndex = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+            } else {
+               x.endIndex = detect_end_of_statement(env.input, p, env);
+            }
+            q = utils.search_next(env.input, x.endIndex+1, utils.SEARCH_SKIPSPACEN);
+            q = skip_next_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            if (q >= 0 && utils.contains(['else', 'finally'], env.input[q].token)) {
+               env.input[q].parent = x.parent || x;
+            }
+            if (x.parent) {
+               x.parent.endIndex = x.endIndex;
+               delete x.parent;
+               clear_bracket_attr(x);
+            }
+         }, (x, env) => x.token === 'catch', origin_state
+      ));
+      // lambda =>
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            let p, q, st, ed;
+            st = env.input_i-1;
+            ed = env.input_i+1;
+            p = utils.search_next(env.input, ed, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (env.input[p].token === '{') {
+               ed = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+            } else {
+               ed = detect_end_of_statement(env.input, p, env, (input, index, ch, env) => {
+                  return utils.contains([',', ')', '}', ']'], ch.token);
+               });
+            }
+            if (env.input[st].csharp_parent) {
+               p = env.input[st].csharp_parent;
+            } else {
+               q = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+               p = env.input[q];
+               p.startIndex = q;
+            }
+            p.name = '-';
+            p.endIndex = ed;
+         }, (x, env) => {
+            if (x.token !== '>') return false;
+            if (utils.prev(env.input, env.input_i, 'token') !== '=') return false;
+            return true;
+         }, origin_state
+      ));
+      // function
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q, name, st, ed;
+            p = utils.search_next(env.input, x.endIndex+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (env.input[p].token === '=' && utils.next(env.input, p, 'token') === '>') {
+               // (...) => ...
+               env.input[p].csharp_parent = x;
+               return;
+            }
+            if (p >= 0 && env.input[p].token === ';') {
+               // e.g. delegate int func(int x);
+               // however function call +a.test(1,2); match, process later
+               ed = p;
+            } else if (env.input[p].token === '{') {
+               ed = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+            } else if (p >= 0 && env.input[p].token === 'where') {
+               // void SwapIfGreater<T>(ref T lhs, ref T rhs) where T : System.IComparable<T> { ... }
+               p = utils.search_next(env.input, p+1, { key:'token', stop:[';', '{'] });
+               if (p >= 0) {
+                  if (env.input[p].token === ';') {
+                     ed = p;
+                  } else if (env.input[p].token === '{') {
+                     ed = env.input[p].endIndex;
+                     clear_bracket_attr(env.input[p]);
+                  }
+               } else {
+                  return;
+               }
+            } else {
+               // standalone or function call
+               return;
+            }
+            //                                                                   <- search back
+            // [attribute] [modifier] return_type(array?) function_name [<generic>] (...) {...}
+            q = utils.search_prev(env.input, x.startIndex-1, utils.SEARCH_SKIPSPACEN);
+            q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            // generic
+            // <T>, <T<X>> ...
+            if (q >= 0 && env.input[q].token === '>') {
+               let deep = 1;
+               while (q > 0 && deep > 0) {
+                  q --;
+                  if (env.input[q].token === '>') {
+                     deep ++;
+                  } else if (env.input[q].token === '<') {
+                     deep --;
+                  }
+               }
+               q = utils.search_prev(env.input, q-1, utils.SEARCH_SKIPSPACEN);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            }
+            // function name
+            name = env.input[q].token;
+            if (utils.contains(['if', 'switch', 'catch', 'while', 'for', 'return'], name)) {
+               return;
+            }
+            if (utils.contains(utils.common_stops, name)) {
+               // e.g. public override bool operator== (Test x) { ... }
+               p = q;
+               q = utils.search_prev(env.input, q-1, { key:'token', stop:['operator'] });
+               name = env.input.slice(q+1, p+1).map((x) => x.token).join('').trim();
+            }
+            p = q;
+            // return type
+            p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            // e.g. int[][][]
+            if (p >= 0 && env.input[p].token === ']') {
+               while (p >= 0 && env.input[p].token === ']') {
+                  p = utils.search_prev(env.input, p-1, { key: 'token', stop:['['] });
+                  clear_bracket_attr(env.input[p]);
+                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               }
+            // function call +test(1,2); a[0].test(1,2); new A(); ...
+            } else if (p >= 0 && utils.contains(utils.common_stops, env.input[p].token)) {
+               return;
+            } else if (p >= 0 && utils.contains(['return', 'new', 'await'], env.input[p].token)) {
+               return;
+            }
+            //             /-- q
+            //            v  v-- p
+            // e.g. System.Data
+            q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+            while (q >= 0 && (env.input[q].token === '.')) {
+               p = utils.search_prev(env.input, q-1, utils.SEARCH_SKIPSPACEN);
+               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+            }
+            q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            while (q >= 0 && utils.contains([
+               'delegate', 'abstract', 'async', 'extern', 'static', 'public', 'private', 'protected',
+               'sealed', 'virtual', 'override', 'unsafe', 'volatile', 'partial'
+            ], env.input[q].token)) {
+               p = q;
+               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            }
+            // attribute (annotation)
+            if (q >= 0 && env.input[q].token === ']') {
+               p = q;
+               while (p >= 0 && env.input[p].token === ']') {
+                  do {
+                     q = utils.search_prev(env.input, q-1, { key: 'token', stop:['['] });
+                  } while (env.input[q].endIndex !== p);
+                  clear_bracket_attr(env.input[q]);
+                  p = q;
+                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               }
+               p = q;
+            }
+            q = env.input[p];
+            q.startIndex = p;
+            q.endIndex = ed;
+            q.name = name;
+         }, (x, env) => x.token === '(' && x.startIndex >= 0, origin_state
+      ));
+
+      // { for class, struct, interface, enum, namespace
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x, env);
+            let p, q, name, st, ed;
+            st = env.input_i;
+            ed = env.input_i+1;
+            p = utils.search_next(env.input, ed, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            name = env.input[p].token;
+            if (name === '{') {
+               // handle with e.g. public static void Test<T>(object x) where T : class { ... }
+               x.name = '-';
+               x.startIndex = st;
+               x.endIndex = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+               return;
+            } else if (name === ';') {
+               // e.g. void Test<T>(object x) where T : class;
+               return;
+            }
+            p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            while (env.input[p].token === '.') {
+               // e.g. namespace Test.Test1
+               p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+               name += '.' + env.input[p].token;
+               p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+            }
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            // generic
+            if (env.input[p].token === '<') {
+               let deep = 1;
+               while (deep > 0) {
+                  p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+                  if (env.input[p].token === '<') {
+                     deep ++;
+                  } else if (env.input[p].token === '>') {
+                     deep --;
+                  }
+               }
+               p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            }
+            // skip inheritance
+            // should have { ... } for body
+            p = utils.search_next(env.input, p, { key: 'token', stop: ['{'] });
+            ed = env.input[p].endIndex;
+            clear_bracket_attr(env.input[p]);
+            //                                               <-- search back
+            // [public/private/protected] [static] [abstract] X ...
+            p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            while (p >= 0 && utils.contains([
+               'partial', 'abstract', 'static', 'public', 'private', 'protected'
+            ], env.input[p].token)) {
+               st = p;
+               p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            }
+            // attribute (annotation)
+            q = p;
+            if (q >= 0 && env.input[q].token === ']') {
+               p = q;
+               while (p >= 0 && env.input[p].token === ']') {
+                  do {
+                     q = utils.search_prev(env.input, q-1, { key: 'token', stop:['['] });
+                  } while (env.input[q].endIndex !== p);
+                  clear_bracket_attr(env.input[q]);
+                  p = q;
+                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               }
+               st = q;
+            }
+            q = env.input[st];
+            q.startIndex = st;
+            q.endIndex = ed;
+            q.name = name;
+         }, (x, env) => utils.contains(['class', 'struct', 'interface', 'namespace', 'enum'], x.token), origin_state
+      ));
+      // delegate { ... }
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q;
+            p = utils.search_next(env.input, env.input_i+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === '(') {
+               q = env.input[p].endIndex;
+               clear_bracket_attr(env.input[p]);
+               p = utils.search_next(env.input, q+1, utils.SEARCH_SKIPSPACEN);
+               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            }
+            if (p < 0 || env.input[p].token !== '{') return;
+            x.startIndex = env.input_i;
+            x.endIndex = env.input[p].endIndex;
+            x.name = '-';
+            clear_bracket_attr(env.input[p]);
+         }, (x, env) => x.token === 'delegate', origin_state
+      ));
+      // standalone block
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            clear_bracket_attr(x);
+         }, (x, env) => x.token === '{' && x.startIndex >= 0, origin_state
       ));
       origin_state.register_condition(new fsm.Condition(
-         5, (output, x, env) => {}, (x, env) => false
+         5, (output, x, env) => {}, (x, env) => false, origin_state
       ));
+
+      // skip preprocessor
+      // e.g. #region this is for you; `for` may confuse parser
+      let preprocessor_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      preprocessor_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => utils.contains(['\n', '\r'], x.token), origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         4, utils.act_push_origin, (x, env) => {
+            if (Array.isArray(x.token)) {
+            }
+            if (x.token.charAt(0) === '#') {
+            }
+            return utils.contains([
+            '#region', '#endregion', '#if', '#else', '#elif', '#endif',
+            '#error', '#warning', '#line', '#define', '#undef'
+         ], x.token)}, preprocessor_state
+      ));
+      this.register_state('preprocessor', preprocessor_state);
 
       function detect_end_of_statement(input, index, env, extra_check_fn) {
          let i, n, ch;
@@ -879,9 +1252,55 @@ class JavaScope extends CLikeScope {
    }
 }
 
+class GoScope extends CLikeScope {
+   constructor() {
+      // after BracketScope
+      super(detect_end_of_statement);
+      let origin_state = this.state.origin;
+
+      function detect_end_of_statement(input, index, env) {
+         let i, n, ch;
+         for (i = index, n = input.length; i < n; i++) {
+            ch = input[i];
+            if (ch.token === ';') return i;
+            if (ch.startIndex >= 0) {
+               // skip ( ... ), { ... }, [ ... ]
+               i = ch.endIndex;
+               continue;
+            }
+         }
+         // should not be here
+         return i-1;
+      }
+   }
+}
+
 class CScope extends CLikeScope {
    constructor() {
-      // after SymbolTokenizer
+      // after BracketScope
+      super(detect_end_of_statement);
+      let origin_state = this.state.origin;
+
+      function detect_end_of_statement(input, index, env) {
+         let i, n, ch;
+         for (i = index, n = input.length; i < n; i++) {
+            ch = input[i];
+            if (ch.token === ';') return i;
+            if (ch.startIndex >= 0) {
+               // skip ( ... ), { ... }
+               i = ch.endIndex;
+               continue;
+            }
+         }
+         // should not be here
+         return i-1;
+      }
+   }
+}
+
+class ObjectiveCScope extends CLikeScope {
+   constructor() {
+      // after BracketScope
       super(detect_end_of_statement);
       let origin_state = this.state.origin;
 
@@ -904,7 +1323,7 @@ class CScope extends CLikeScope {
 
 class CPrecompileScope extends fsm.Feature {
    constructor() {
-      // after BracketScope
+      // after SymbolTokenizer
       super();
       let origin_state = new fsm.State(new fsm.Condition(
          0, utils.act_push_origin, utils.always
@@ -922,6 +1341,9 @@ module.exports = {
    CLikeScope,
    JavaScriptScope,
    JavaScope,
+   CsharpScope,
+   GoScope,
    CPrecompileScope,
-   CScope
+   CScope,
+   ObjectiveCScope
 };

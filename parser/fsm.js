@@ -333,7 +333,7 @@ class FeatureCommonComment extends Feature {
       let tag = this.env.tag;
       epsilon.register_condition(new Condition(
          5, (output, x, env) => {
-            output.push({ token: start, tag: tag });
+            output.push({ token: Array.isArray(start)?start[0]:start, tag: tag });
             return start_len;
          }, utils.factory_text_cmp(start, start_len), comment
       ));
@@ -342,10 +342,51 @@ class FeatureCommonComment extends Feature {
             if (include_end) {
                utils.act_concat(output, { token: end });
             } else {
-               output.push({ token: end, tag: null });
+               output.push({ token: Array.isArray(end)?end[0]:end, tag: null });
             }
             return end_len;
          }, utils.factory_text_cmp(end, end_len), epsilon
+      ));
+      return feature;
+   }
+}
+
+class FeatureInvisible extends Feature {
+   constructor(starts, ends) {
+      // e.g. starts = [ ['#', 'region'], ['#', 'define'] ], ends = [['\n'], ['\r']]
+      super();
+      this.starts = starts;
+      this.ends = ends;
+      let invisible = new State(
+         new Condition(0, utils.act_concat, utils.always)
+      );
+      this.register_state('invisible', invisible);
+      this.set_entry(null);
+   }
+
+   merge_feature_to(feature) {
+      // merge to feature root
+      // connect common_string to epsilon
+      if (!('epsilon' in feature.state)) return;
+      let epsilon = feature.state.epsilon;
+      let invisible = this.state.invisible;
+      let starts = this.starts;
+      let ends = this.ends;
+      epsilon.register_condition(new Condition(
+         5, utils.act_push_origin, (x, env) => {
+            for (let i = 0, n = starts.length; i < n; i++) {
+               if (utils.cmp_match_array(env.input, env.input_i, starts[i], 'token')) return true;
+            }
+            return false;
+         }, invisible
+      ));
+      invisible.register_condition(new Condition(
+         5, utils.act_push_origin, (x, env) => {
+            for (let i = 0, n = ends.length; i < n; i++) {
+               if (utils.cmp_match_array(env.input, env.input_i, ends[i], 'token')) return true;
+            }
+            return false;
+         }, epsilon
       ));
       return feature;
    }
@@ -580,6 +621,7 @@ module.exports = {
    FeatureRoot,
    FeatureCommonString,
    FeatureCommonComment,
+   FeatureInvisible,
    FeatureDolarSign,
    FeatureRubyENDDoc,
    FeatureRubyHereDocString,

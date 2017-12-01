@@ -5,6 +5,7 @@ const common_stops = [
    '"', '\'', ',', '.', '<', '>', '/', '?', ' ', '\t', '\r', '\n'
 ];
 
+const TAG_OTHER = 'other';
 const TAG_STRING = 'string';
 const TAG_COMMENT = 'comment';
 const TAG_REGEX = 'regex';
@@ -27,6 +28,22 @@ function act_push_origin_range (output, input, start, end) {
       output.push(input[i]);
    }
    return end - start + 1;
+}
+
+function cmp_match_array(longarr, offset, matcharr, key1, key2) {
+   let n = offset + matcharr.length;
+   if (n > longarr.length) n = longarr.length;
+   if (longarr[offset].token === '#') {
+   }
+   let i = 0, j = offset;
+   for (; j < n; i++, j++) {
+      let a = longarr[j], b = matcharr[i];
+      if (key1) a = a[key1];
+      if (key2) b = b[key2];
+      if (a === b) continue;
+      return false;
+   }
+   return true;
 }
 
 function factory_text_cmp(expect, len) {
@@ -93,10 +110,10 @@ function search_prev(array, index, options) {
       while (index >= 0) {
          let value = array[index];
          if (key) value = value[key];
-         if (contains(skip, value)) {
-            index --;
+         if (!contains(skip, value)) {
+            return index;
          }
-         return index;
+         index --;
       }
    } else if(stop) {
       while (index >= 0) {
@@ -145,6 +162,7 @@ function contains(array, value) {
 }
 
 module.exports = {
+   TAG_OTHER,
    TAG_STRING,
    TAG_COMMENT,
    TAG_REGEX,
@@ -154,6 +172,7 @@ module.exports = {
    common_stops,
    act_concat,
    act_push_origin,
+   cmp_match_array,
    factory_text_cmp,
    text_cmp_1,
    text_cmp_n,
