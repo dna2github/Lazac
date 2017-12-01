@@ -172,7 +172,7 @@ class CsharpTokenizer {
       // declare symbol with @name -> (usage) like @if -> (@if), @a -> (a, @a)
       tokens = new SymbolTokenizer(['_', '@', '#']).process(tokens);
       // csharp use [] for attribute (annotation), e.g. [Condition("DEBUG")]
-      tokens = new scope.BracketScope({'(': ')', '{': '}', '[': ']'}).process(tokens);
+      tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.CsharpScope().process(tokens);
       return tokens;
    }

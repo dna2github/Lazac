@@ -157,6 +157,49 @@ function search_next(array, index, options) {
    return -1;
 }
 
+function search_pair_next(array, index, options) {
+   if (!options) options = {};
+   let key = options.key;
+   let n = array.length;
+   let left = options.left;
+   let right = options.right;
+   let deep = 0;
+   while (index < n) {
+      let value = array[index];
+      if (key) value = value[key];
+      if (value === left) {
+         deep ++;
+      } else if (value === right) {
+         deep --;
+      }
+      if (!deep) break;
+      index ++;
+   }
+   if (deep) return -1;
+   return index;
+}
+
+function search_pair_prev(array, index, options) {
+   if (!options) options = {};
+   let key = options.key;
+   let left = options.left;
+   let right = options.right;
+   let deep = 0;
+   while (index >= 0) {
+      let value = array[index];
+      if (key) value = value[key];
+      if (value === right) {
+         deep ++;
+      } else if (value === left) {
+         deep --;
+      }
+      if (!deep) break;
+      index --;
+   }
+   if (deep) return -1;
+   return index;
+}
+
 function contains(array, value) {
    return array.indexOf(value) >= 0;
 }
@@ -183,5 +226,7 @@ module.exports = {
    prev,
    search_prev,
    search_next,
+   search_pair_prev,
+   search_pair_next,
    contains
 };

@@ -1,6 +1,9 @@
 const utils = require('../utils');
 const fsm = require('./fsm');
 
+const SEARCH_GENERICS = { key: 'token', left: '<', right: '>' };
+const SEARCH_ATTRIBUTE = { key: 'token', left: '[', right: ']' };
+
 function clear_bracket_attr(x) {
    delete x.startIndex;
    delete x.endIndex;
@@ -19,6 +22,21 @@ function skip_prev_comment(input, index, search_options) {
       index = utils.search_prev(input, index-1, search_options);
    }
    return index;
+}
+
+function match_modifier_prev(array, index, modifiers) {
+   let p = index, q = index;
+   let once = [];
+   p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+   p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+   while (p >= 0 && utils.contains(modifiers, array[p].token)) {
+      if (once.indexOf(array[p].token) >= 0) break;
+      once.push(array[p].token);
+      q = p;
+      p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+      p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+   }
+   return q;
 }
 
 class RubyScope extends fsm.Feature {
@@ -759,27 +777,11 @@ class JavaScope extends CLikeScope {
             // generic
             // <T>, <T<X>> ...
             if (q >= 0 && env.input[q].token === '>') {
-               let deep = 1;
-               while (q > 0 && deep > 0) {
-                  q --;
-                  if (env.input[q].token === '>') {
-                     deep ++;
-                  } else if (env.input[q].token === '<') {
-                     deep --;
-                  }
-               }
-               p = q;
-               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+               p = utils.search_pair_prev(env.input, q, SEARCH_GENERICS);
             }
-            if (q >= 0 && env.input[q].token === 'static') {
-               p = q;
-               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
-            }
-            if (q >= 0 && utils.contains(['public', 'private', 'protected'], env.input[q].token)) {
-               p = q;
-            }
+            p = match_modifier_prev(env.input, q, [
+               'public', 'private', 'protected', 'static'
+            ]);
             if (env.input[p].java_parent) {
                q = env.input[p].java_parent;
                delete env.input[p].java_parent;
@@ -811,15 +813,7 @@ class JavaScope extends CLikeScope {
             p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             // generic
             if (env.input[p].token === '<') {
-               let deep = 1;
-               while (deep > 0) {
-                  p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
-                  if (env.input[p].token === '<') {
-                     deep ++;
-                  } else if (env.input[p].token === '>') {
-                     deep --;
-                  }
-               }
+               p = utils.search_pair_next(env.input, p, SEARCH_GENERICS);
                p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
                p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
@@ -831,24 +825,13 @@ class JavaScope extends CLikeScope {
             // [public/private/protected] [static] [abstract] [@]X ...
             if (utils.prev(env.input, st, 'token') === '@') {
                // no @class, thus only @interface
-               p = utils.search_prev(env.input, st-2, utils.SEARCH_SKIPSPACEN);
+               p = st - 1;
             } else {
-               p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
+               p = st;
             }
-            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            if (p >= 0 && env.input[p].token === 'abstract') {
-               st = p;
-               p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            }
-            if (p >= 0 && env.input[p].token === 'static') {
-               st = p;
-               p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            }
-            if (p >= 0 && utils.contains(['public', 'private', 'protected'], env.input[p].token)) {
-               st = p;
-            }
+            st = match_modifier_prev(env.input, p, [
+               'public', 'private', 'protected', 'static', 'abstract'
+            ]);
             if (env.input[st].java_parent) {
                env.input[st].java_parent.name = name;
                env.input[st].java_parent.endIndex = ed;
@@ -1016,83 +999,37 @@ class CsharpScope extends CLikeScope {
             }
             //                                                                   <- search back
             // [attribute] [modifier] return_type(array?) function_name [<generic>] (...) {...}
-            q = utils.search_prev(env.input, x.startIndex-1, utils.SEARCH_SKIPSPACEN);
-            q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            p = utils.search_prev(env.input, x.startIndex-1, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            clear_bracket_attr(x);
             // generic
             // <T>, <T<X>> ...
-            if (q >= 0 && env.input[q].token === '>') {
-               let deep = 1;
-               while (q > 0 && deep > 0) {
-                  q --;
-                  if (env.input[q].token === '>') {
-                     deep ++;
-                  } else if (env.input[q].token === '<') {
-                     deep --;
-                  }
-               }
-               q = utils.search_prev(env.input, q-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === '>') {
+               p = utils.search_pair_prev(env.input, p, SEARCH_GENERICS);
+               p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
             // function name
-            name = env.input[q].token;
-            if (utils.contains(['if', 'switch', 'catch', 'while', 'for', 'return'], name)) {
-               return;
-            }
+            name = env.input[p].token;
+            if (utils.contains(['if', 'switch', 'catch', 'while', 'for', 'return'], name)) return;
             if (utils.contains(utils.common_stops, name)) {
                // e.g. public override bool operator== (Test x) { ... }
-               p = q;
-               q = utils.search_prev(env.input, q-1, { key:'token', stop:['operator'] });
-               name = env.input.slice(q+1, p+1).map((x) => x.token).join('').trim();
-            }
-            p = q;
-            // return type
-            p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            // e.g. int[][][]
-            if (p >= 0 && env.input[p].token === ']') {
-               while (p >= 0 && env.input[p].token === ']') {
-                  p = utils.search_prev(env.input, p-1, { key: 'token', stop:['['] });
-                  clear_bracket_attr(env.input[p]);
-                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               q = p;
+               p = utils.search_prev(env.input, p-1, { key:'token', skip:utils.common_stops });
+               if (p < 0 || env.input[p].token !== 'operator') {
+                  // e.g. this.test = (1 + 1)/2
+                  return;
                }
-            // function call +test(1,2); a[0].test(1,2); new A(); ...
-            } else if (p >= 0 && utils.contains(utils.common_stops, env.input[p].token)) {
-               return;
-            } else if (p >= 0 && utils.contains(['return', 'new', 'await'], env.input[p].token)) {
-               return;
+               name = env.input.slice(p+1, q+1).map((x) => x.token).join('').trim();
+               p = q;
             }
-            //             /-- q
-            //            v  v-- p
-            // e.g. System.Data
-            q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-            while (q >= 0 && (env.input[q].token === '.')) {
-               p = utils.search_prev(env.input, q-1, utils.SEARCH_SKIPSPACEN);
-               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-            }
-            q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
-            while (q >= 0 && utils.contains([
+            p = match_function_type_prev(env.input, p);
+            if (p < 0) return;
+            p = match_modifier_prev(env.input, p, [
                'delegate', 'abstract', 'async', 'extern', 'static', 'public', 'private', 'protected',
                'sealed', 'virtual', 'override', 'unsafe', 'volatile', 'partial'
-            ], env.input[q].token)) {
-               p = q;
-               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
-            }
-            // attribute (annotation)
-            if (q >= 0 && env.input[q].token === ']') {
-               p = q;
-               while (p >= 0 && env.input[p].token === ']') {
-                  do {
-                     q = utils.search_prev(env.input, q-1, { key: 'token', stop:['['] });
-                  } while (env.input[q].endIndex !== p);
-                  clear_bracket_attr(env.input[q]);
-                  p = q;
-                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-               }
-               p = q;
-            }
+            ]);
+            p = match_attribute(env.input, p);
             q = env.input[p];
             q.startIndex = p;
             q.endIndex = ed;
@@ -1132,15 +1069,7 @@ class CsharpScope extends CLikeScope {
             p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             // generic
             if (env.input[p].token === '<') {
-               let deep = 1;
-               while (deep > 0) {
-                  p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
-                  if (env.input[p].token === '<') {
-                     deep ++;
-                  } else if (env.input[p].token === '>') {
-                     deep --;
-                  }
-               }
+               p = utils.search_pair_next(env.input, p, SEARCH_GENERICS);
                p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
                p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             }
@@ -1149,33 +1078,11 @@ class CsharpScope extends CLikeScope {
             p = utils.search_next(env.input, p, { key: 'token', stop: ['{'] });
             ed = env.input[p].endIndex;
             clear_bracket_attr(env.input[p]);
-            //                                               <-- search back
-            // [public/private/protected] [static] [abstract] X ...
-            p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            while (p >= 0 && utils.contains([
-               'partial', 'abstract', 'static', 'public', 'private', 'protected'
-            ], env.input[p].token)) {
-               st = p;
-               p = utils.search_prev(env.input, st-1, utils.SEARCH_SKIPSPACEN);
-               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-            }
-            // attribute (annotation)
-            q = p;
-            if (q >= 0 && env.input[q].token === ']') {
-               p = q;
-               while (p >= 0 && env.input[p].token === ']') {
-                  do {
-                     q = utils.search_prev(env.input, q-1, { key: 'token', stop:['['] });
-                  } while (env.input[q].endIndex !== p);
-                  clear_bracket_attr(env.input[q]);
-                  p = q;
-                  p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
-                  p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
-               }
-               st = q;
-            }
-            q = env.input[st];
+            p = match_modifier_prev(env.input, p, [
+               'public', 'private', 'protected', 'static', 'abstract', 'partial'
+            ]);
+            p = match_attribute(env.input, p);
+            q = env.input[p];
             q.startIndex = st;
             q.endIndex = ed;
             q.name = name;
@@ -1201,6 +1108,38 @@ class CsharpScope extends CLikeScope {
             clear_bracket_attr(env.input[p]);
          }, (x, env) => x.token === 'delegate', origin_state
       ));
+      // indexer function
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q;
+            p = utils.search_pair_next(env.input, env.input_i, SEARCH_ATTRIBUTE);
+            p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACEN);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            q = env.input[p];
+            if (q && q.token === '{') {
+               // e.g. public string[][] this[string key] {...}
+               let st, ed;
+               ed = q.endIndex;
+               p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               // env.input[p] should be `this`
+               if (env.input[p].token !== 'this') return;
+               p = match_function_type_prev(env.input, p);
+               if (p < 0) return;
+               p = match_modifier_prev(env.input, p, [
+                  'delegate', 'abstract', 'async', 'extern', 'static', 'public', 'private', 'protected',
+                  'sealed', 'virtual', 'override', 'unsafe', 'volatile', 'partial'
+               ]);
+               p = match_attribute(env.input, p);
+               q = env.input[p];
+               q.startIndex = p;
+               q.endIndex = ed;
+               q.name = '[]';
+               return;
+            }
+         }, (x, env) => x.token === '[', origin_state
+      ));
       // standalone block
       origin_state.register_condition(new fsm.Condition(
          5, (output, x, env) => {
@@ -1222,10 +1161,6 @@ class CsharpScope extends CLikeScope {
       ));
       origin_state.register_condition(new fsm.Condition(
          4, utils.act_push_origin, (x, env) => {
-            if (Array.isArray(x.token)) {
-            }
-            if (x.token.charAt(0) === '#') {
-            }
             return utils.contains([
             '#region', '#endregion', '#if', '#else', '#elif', '#endif',
             '#error', '#warning', '#line', '#define', '#undef'
@@ -1248,6 +1183,49 @@ class CsharpScope extends CLikeScope {
          }
          // should not be here
          return i-1;
+      }
+      function match_function_type_prev(array, index) {
+         let p = index, q;
+         p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+         p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+         // e.g. int[][][]
+         if (p >= 0 && array[p].token === ']') {
+            while (p >= 0 && array[p].token === ']') {
+               p = utils.search_prev(array, p-1, { key: 'token', stop:['['] });
+               p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+            }
+         // function call +test(1,2); a[0].test(1,2); new A(); ...
+         } else if (p >= 0 && utils.contains(utils.common_stops, array[p].token)) {
+            return -1;
+         } else if (p >= 0 && utils.contains(['return', 'new', 'await'], array[p].token)) {
+            return -1;
+         }
+         //             /-- q
+         //            v  v-- p
+         // e.g. System.Data
+         p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+         q = p;
+         while (p >= 0 && (array[p].token === '.')) {
+            p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+            q = p;
+            p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+         }
+         return q;
+      }
+      function match_attribute(array, index) {
+         let p = index, q = index;
+         p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+         p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+         if (p >= 0 && array[p].token === ']') {
+            while (p >= 0 && array[p].token === ']') {
+               p = utils.search_pair_prev(array, p, SEARCH_ATTRIBUTE);
+               q = p;
+               p = utils.search_prev(array, p-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(array, p, utils.SEARCH_SKIPSPACEN);
+            }
+         }
+         return q;
       }
    }
 }

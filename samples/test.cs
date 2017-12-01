@@ -27,5 +27,18 @@ namespace Test {
       public A1 operator+(A1 x) {
          return x;
       }
+
+      #region this is public
+      public string this[int index] {
+         get {
+            string tmp;
+            if(index >= 0 && index <= size-1) tmp = namelist[index]; else tmp = "";
+            return tmp;
+         }
+         set {
+            if(index >= 0 && index <= size-1) namelist[index] = value;
+         }
+      }
+      #endregion
    }
 }
