@@ -1,3 +1,4 @@
+/* regex? */
 function test() {
    return /"/.test('xxx"xxx');
 }
@@ -18,4 +19,5 @@ if (a === 1) {
 } else if (a === 2) b = 3
 else b = 4
 c = 1
+x = a/b/gi; y = /b/gi;
 

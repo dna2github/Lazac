@@ -221,7 +221,7 @@ class FeatureCommonString extends Feature {
       return this.merge_feature_to(feature);
    }
 
-   merge_feature_as_regex(feature, keywords) {
+   merge_feature_as_regex(feature, keywords, extra_check_fn) {
       // merge to feature root
       // connect common_string to epsilon
       if (!('epsilon' in feature.state)) return;
@@ -237,11 +237,14 @@ class FeatureCommonString extends Feature {
             env.stop_mark = x.token;
          }, (x, env) => {
             if (!utils.contains(this.marks, x.token)) return false;
+            if (extra_check_fn && !extra_check_fn(x, env)) {
+               return false;
+            }
             let i, n;
             let p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACEN);
-            if (p >= 0 && utils.contains([')', ']'], env.input[p].token)) return false;
+            if (p >= 0 && utils.contains([')', ']', '}'], env.input[p].token)) return false;
             p = -1;
-            for(i = env.input_i+1, n = env.input.length; i <= n; i++) {
+            for(i = env.input_i+1, n = env.input.length; i < n; i++) {
                if (env.input[i].token === '\\') {
                   i ++; continue;
                }
@@ -252,12 +255,12 @@ class FeatureCommonString extends Feature {
                }
             }
             if (p < 0) return false;
-            if (i+1 === p && utils.contains(['g', 'i'], env.input[p].token)) {
+            if (i+1 === p && utils.contains(['g', 'i', 'gi', 'ig'], env.input[p].token)) {
                p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACE);
             }
             if (p < 0) return false;
             p = env.input[p];
-            if (p.token === '\n' || p.token === ')') return true;
+            if (utils.contains(['\n', ')', ']', '}', '\r'], p.token)) return true;
             if (!utils.contains(['.', ';', ','], p.token)) return false;
             p = utils.search_prev(env.output, env.output.length-1, utils.SEARCH_SKIPSPACE);
             while (p >= 0 && env.output[p].tag === utils.TAG_COMMENT) {

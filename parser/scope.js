@@ -532,7 +532,7 @@ class JavaScriptScope extends CLikeScope {
             if (env.input[p].token !== '(') {
                // e.g. function hello, function $query
                q = utils.search_next(env.input, p+1, { key: 'token', stop: ['('] });
-               x.name = env.input.slice(p+1, q).map((x) => x.token).join('').trim();
+               x.name = env.input.slice(p+1, q).map((x) => x.token).join('').trim() || '-';
                p = q;
             }
             // now env.input[p] should be '('

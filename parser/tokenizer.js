@@ -181,7 +181,13 @@ class CsharpTokenizer {
 class JavaScriptTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
-      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser, ['return']);
+      new fsm.FeatureCommonString(['/']).merge_feature_as_regex(this.parser, ['return'], (x, env) => {
+         // avoid ambigous with /*  */ and //
+         let ch = env.input[env.input_i+1];
+         if (ch && ch.token === '/') return false;
+         if (ch && ch.token === '*') return false;
+         return true;
+      });
       this.features = [
          new fsm.FeatureCommonString(['\'', '"', '`']),
          new fsm.FeatureCommonComment('c_style_line_comment', '//'.split(''), '\n', false).set_flag_n_eq_r(),
@@ -195,7 +201,7 @@ class JavaScriptTokenizer {
    process(text) {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
-      tokens = new SymbolTokenizer().process(tokens);
+      tokens = new SymbolTokenizer(['_', '$']).process(tokens);
       console.log(JSON.stringify(tokens, null, 3));
       tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.JavaScriptScope().process(tokens);
