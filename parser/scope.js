@@ -3,6 +3,8 @@ const fsm = require('./fsm');
 
 const SEARCH_GENERICS = { key: 'token', left: '<', right: '>' };
 const SEARCH_ATTRIBUTE = { key: 'token', left: '[', right: ']' };
+const SEARCH_BLOCK = { key: 'token', left: '{', right: '}' };
+const SEARCH_PARAM = { key: 'token', left: '(', right: ')' };
 
 function clear_bracket_attr(x) {
    delete x.startIndex;
@@ -384,6 +386,205 @@ class PythonScope extends fsm.Feature {
       this.register_state('annotation_bracket', annotation_bracket_state);
       this.register_state('bracket', bracket_state);
       this.set_entry('origin');
+   }
+}
+
+
+class GoScope extends fsm.Feature {
+   constructor() {
+      // after BracketScope
+      super();
+      let origin_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      // if ... else if ... else ..., for, switch, select
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q;
+            p = utils.search_next(env.input, env.input_i, utils.SEARCH_SKIPSPACEN);
+            if (p >= 0 && env.input[p].token === 'if') {
+               // else if
+               env.input[p].parent = x.parent;
+               delete x.parent;
+            }
+            p = utils.search_next(env.input, env.input_i, { key:'token', stop:['{'] });
+            q = env.input[p];
+            p = q.endIndex;
+            clear_bracket_attr(q);
+            q = utils.search_next(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (x.parent) {
+               x.parent.endIndex = p;
+               delete x.parent;
+            } else {
+               x.startIndex = env.input_i;
+               x.endIndex = p;
+            }
+         }, (x, env) => utils.contains([
+            'if', 'else', 'for', 'switch', 'select'
+         ], x.token), origin_state
+      ));
+
+      // interface, struct
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x ,env) => {
+            utils.act_push_origin(output, x);
+            let p, q, st, ed, name;
+            p = detect_type_arr_n_ptr_prev(env.input, env.input_i);
+            q = env.input[p];
+            if (q && q.token === '(') {
+               st = p+1;
+               name = '-';
+            } else {
+               q = p;
+               p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACE);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+               // type A interface {}
+               // type (\n A interface{}; B interface{} )\n
+               if (p >= 0 && utils.contains(['type', '\n', '\r', ';'], env.input[p].token)) {
+                  name = env.input[q].token;
+                  st = p;
+               } else {
+                  name = '-';
+                  st = env.input_i;
+               }
+            }
+            p = utils.search_next(env.input, env.input_i+1, utils.SEARCH_SKIPSPACE);
+            p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+            // env.input[p] should be '{'
+            ed = utils.search_pair_next(env.input, p, SEARCH_BLOCK);
+            q = env.input[st];
+            q.startIndex = st;
+            q.endIndex = ed;
+            q.name = name;
+         }, (x, env) => utils.contains(['struct', 'interface'], x.token), origin_state
+      ));
+
+      // func
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q, st, ed, name;
+            p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACE);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+            q = env.input[p];
+            if (!q || utils.contains(['\n', '\r', ';', '[', ':', ','], q.token)) {
+               // { test: func main() {...} }
+               // [ func main() {...}, func main2() {...} ]
+               // func main() { ... }
+               st = env.input_i;
+               p = utils.search_next(env.input, st+1, utils.SEARCH_SKIPSPACE);
+               p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+               if (p >= 0 && env.input[p].token === '(') {
+                  p = utils.search_pair_next(env.input, p, SEARCH_PARAM);
+                  p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACE);
+                  p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+               }
+               name = env.input[p].token;
+               q = p;
+               p = utils.search_next(env.input, p+1, { key:'token', stop:['{'] });
+               if (p < 0) {
+                  ed = q;
+               } else {
+                  ed = utils.search_pair_next(env.input, p, SEARCH_BLOCK);
+               }
+            } else if (q.token === ')') {
+               //             v
+               // func test() func () { ... }
+               return;
+            } else if (utils.contains(['return'], q.token)) {
+               st = env.input_i;
+               name = '-';
+               p = utils.search_next(env.input, p+1, { key:'token', stop:['{'] });
+               ed = utils.search_pair_next(env.input, p, SEARCH_BLOCK);
+            } else {
+               // func test(x,y func() int) func(func() int) int { return func(x func() int) int { return 0; } }
+               // (func (x int) {})(0)
+               // func test() (func () int, int) { ... }
+               p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACE);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+               q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACE);
+               q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACE);
+               if (env.input[q].token === 'type') {
+                  //   v
+                  // type A func () int;
+                  return;
+               } else if (env.input[p].token === '(' && utils.contains(['func', ')'], env.input[q].token)) {
+                  //                               v
+                  // func test(x,y func() int) func(func() int) int { return func(x func() int) int { return 0; } }
+                  // v
+                  // (func (x int) {})(0)
+                  return;
+               } else if (utils.contains(['(', ','], env.input[q].token)) {
+                  //            v                                                v
+                  // func test(x,y func() int) func(func() int) int { return func(x func() int) int { return 0; } }
+                  return;
+               } else {
+                  st = env.input_i;
+                  name = '-';
+                  p = utils.search_next(env.input, p+1, { key:'token', stop:['{'] });
+                  //                                        v func does not have { ... }
+                  // type Test struct { process func() error }
+                  if (p < 0) return;
+                  ed = utils.search_pair_next(env.input, p, SEARCH_BLOCK);
+               }
+            }
+            q = env.input[st];
+            q.startIndex = st;
+            q.endIndex = ed;
+            q.name = name;
+         }, (x, env) => x.token === 'func', origin_state
+      ));
+      // interface function declare
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let p, q, name, st, ed;
+            q = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACE);
+            q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACE);
+            if (p < 0) return;
+            p = utils.search_prev(env.input, q-1, utils.SEARCH_SKIPSPACE);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACE);
+            if (!utils.contains(['\n', ';', '\r'], env.input[p])) return;
+            name = env.input[q].token;
+            st = p;
+            p = utils.search_next(env.input, env.input_i+1, { key:'token', stop:[';', '\n', '\r'] });
+            if (p < 0) return;
+            if (env.input[p].token === ';') {
+               ed = p;
+            } else {
+               ed = p - 1;
+            }
+            q = env.input[st];
+            q.startIndex = st;
+            q.endIndex = ed;
+            q.name = name;
+         }, (x, env) => x.token === '(', origin_state
+      ));
+
+      this.register_state('origin', origin_state);
+      this.set_entry('origin');
+
+      function detect_end_of_statement(input, index, env) {
+         // block should use { ... }
+         return index-1;
+      }
+
+      function detect_type_arr_n_ptr_prev(input, index) {
+         index--;
+         while (index > 0) {
+            if (input[index].tag === utils.TAG_COMMENT) {
+               index--;
+               continue;
+            }
+            if (utils.contains([' ', '\t', '\r', '\n', '[', ']', '*'], input[index].token)) {
+               index--;
+               continue;
+            }
+            return index;
+         }
+         return index;
+      }
    }
 }
 
@@ -1230,29 +1431,6 @@ class CsharpScope extends CLikeScope {
    }
 }
 
-class GoScope extends CLikeScope {
-   constructor() {
-      // after BracketScope
-      super(detect_end_of_statement);
-      let origin_state = this.state.origin;
-
-      function detect_end_of_statement(input, index, env) {
-         let i, n, ch;
-         for (i = index, n = input.length; i < n; i++) {
-            ch = input[i];
-            if (ch.token === ';') return i;
-            if (ch.startIndex >= 0) {
-               // skip ( ... ), { ... }, [ ... ]
-               i = ch.endIndex;
-               continue;
-            }
-         }
-         // should not be here
-         return i-1;
-      }
-   }
-}
-
 class CScope extends CLikeScope {
    constructor() {
       // after BracketScope
@@ -1315,12 +1493,12 @@ module.exports = {
    RubyScope,
    PythonLambdaScope,
    PythonScope,
+   GoScope,
    BracketScope,
    CLikeScope,
    JavaScriptScope,
    JavaScope,
    CsharpScope,
-   GoScope,
    CPrecompileScope,
    CScope,
    ObjectiveCScope
