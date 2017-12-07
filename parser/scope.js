@@ -1481,12 +1481,196 @@ class CPrecompileScope extends fsm.Feature {
    constructor() {
       // after SymbolTokenizer
       super();
+      this.env.symbols = {
+         /* key = [#define]name
+            value = x.preprocess */
+      };
+      this.env.block_stack = [];
       let origin_state = new fsm.State(new fsm.Condition(
          0, utils.act_push_origin, utils.always
       ));
+      let preprocessor_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            env.block_stack.push(x);
+            let p = utils.search_next(env.input, env.input_i+1, utils.SEARCH_SKIPSPACE);
+            x.preprocess = {
+               type: env.input[p].token
+            }
+
+            switch (x.preprocess.type) {
+            case 'include':
+               x.preprocess.filename = detect_include_file_name(env.input, p+1);
+               break;
+            case 'define':
+               Object.assign(x.preprocess, detect_define_structure(env.input, p+1, env));
+               register_symbol(env.symbols, x.preprocess.name, x.preprocess);
+               break;
+            case 'undef':
+               Object.assign(x.preprocess, detect_undef_symbol(env.input, p+1, env));
+               break;
+            case 'if':
+            case 'ifdef':
+            case 'ifndef':
+            case 'elif':
+            case 'else':
+               x.preprocess.startIndex = env.input_i;
+               break;
+            }
+         }, (x, env) => x.token === '#', preprocessor_state
+      ));
+      preprocessor_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            let $x = utils.last(env.block_stack), $y;
+            if (utils.contains(['if', 'ifdef', 'ifndef'], $x.preprocess.type)) {
+               $x.preprocess.startIndex = env.input_i+1;
+            } else if (utils.contains(['elif', 'else'], $x.preprocess.type)) {
+               env.block_stack.pop();      // pop self
+               $y = env.block_stack.pop(); // pop if/ifdef/ifndef
+               env.block_stack.push($x);   // push self
+               $y.preprocess.endIndex = $x.preprocess.startIndex-1;
+               $y.preprocess.chainIndex = env.input_i;
+               $x.preprocess.startIndex = env.input_i+1;
+            } else if ($x.preprocess.type === 'endif') {
+               env.block_stack.pop();      // pop self
+               $y = env.block_stack.pop(); // pop if/ifdef/ifndef
+               $y.preprocess.endIndex = env.input_i-1;
+            } else {
+               env.block_stack.pop();
+            }
+            $x.preprocess.jumpIndex = env.input_i+1;
+         }, (x, env) => {
+            // #define A ( \ \n )
+            if (x.token === '\r') {
+               if (env.input[env.input_i-1].token === '\\') return false;
+               return true;
+            } else if (x.token === '\n') {
+               if (env.input[env.input_i-1].token === '\\') return false;
+               if (env.input[env.input_i-1].token === '\r' && env.input[env.input_i-2].token === '\\') return false;
+               return true;
+            }
+            return false;
+         }, origin_state
+      ));
       this.register_state('origin', origin_state);
+      this.register_state('preprocess', preprocessor_state);
       this.set_entry('origin');
-   }
+
+      function detect_include_file_name(input, index, env) {
+         let n = input.length;
+         while (index < n) {
+            if (input[index].token === '<') {
+               n = utils.search_next(input, index+1, { key:'token', stop:['>'] });
+               return input.slice(index+1, n).map((x) => x.token).join('').trim();
+            } else if (input[index].tag === utils.TAG_STRING) {
+               n = input[index].token;
+               return n.substring(1, n.length-1);
+            }
+            index++;
+         }
+         // should not be here
+         return '(error)';
+      }
+
+      function detect_define_structure(input, index, env) {
+         let p, q;
+         let n = input.length;
+         let $define = {
+            name: null,
+            contentIndex: index,
+            jumpIndex: index
+         };
+         index = utils.search_next(input, index, utils.SEARCH_SKIPSPACE);
+         $define.name = input[index].token;
+         // #define A EOF
+         if (index+1 >= n) {
+            $define.startIndex = index;
+            $define.endIndex = n - 1;
+            $define.jumpIndex = index;
+            return $define;
+         }
+         index ++;
+         if (input[index].token === '(') {
+            p = index+1;
+            q = [];
+            while(true) {
+               index = utils.search_next(input, index+1, { key:'token', stop:[',', ')'] });
+               if (input[index].token === ',') {
+                  q.push(input.slice(p, index).map((x) => x.token).join('').trim());
+                  p = index+1;
+                  continue;
+               } else {
+                  p = input.slice(p, index).map((x) => x.token).join('').trim();
+                  // #define A() => #define A
+                  if (p) q.push(p);
+                  break;
+               }
+               // should not be here
+            }
+            $define.params = q;
+            index ++;
+            index = utils.search_next(input, index+1, utils.SEARCH_SKIPSPACE);
+         }
+         $define.contentIndex = index;
+
+         let pair = { '()': 0, '{}': 0 };
+         while(index < n) {
+            p = input[index];
+            q = input[index-1];
+            if (p.token === '\n') {
+               if (q.token === '\\') {
+                  index ++;
+                  continue;
+               }
+               break;
+            } else if (p.token === '\r') {
+               if (q.token !== '\\') {
+                  break;
+               }
+               p = input[index+1];
+               if (p && p.token === '\n') {
+                  index += 2;
+               } else {
+                  index ++;
+               }
+               continue;
+            }
+            switch(p.token) {
+            case '{': pair['{}']++; break;
+            case '(': pair['()']++; break;
+            case '}': pair['{}']--; break;
+            case ')': pair['()']--; break;
+            }
+            index++;
+         }
+         if (pair['()']) $define['()'] = pair['()'];
+         if (pair['{}']) $define['{}'] = pair['{}'];
+         $define.startIndex = index;
+         $define.endIndex = n-1;
+         $define.jumpIndex = index;
+         return $define;
+      }
+
+      function register_symbol(symbols, name, one) {
+         if (symbols[name]) {
+            symbols[name].endIndex = one.startIndex-1;
+         }
+         symbols[name] = one;
+      }
+
+      function detect_undef_symbol(input, index, env) {
+         index = utils.search_next(input, index, utils.SEARCH_SKIPSPACE);
+         let $undef = {};
+         $undef.name = input[index].token;
+         if (!env.symbols[$undef.name]) return $undef;
+         env.symbols[$undef.name].endIndex = env.input_i-1;
+         return $undef;
+      }
+   } // CPrecompileScope.constructor
 }
 
 module.exports = {

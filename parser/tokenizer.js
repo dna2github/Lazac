@@ -68,9 +68,9 @@ class CTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
-      tokens = new scope.BracketScope().process(tokens);
-      // tokens = new scope.CPrecompileScope().process(tokens);
-      tokens = new scope.CScope().process(tokens);
+      tokens = new scope.CPrecompileScope().process(tokens);
+      //tokens = new scope.BracketScope().process(tokens);
+      //tokens = new scope.CScope().process(tokens);
       return tokens;
    }
 }
@@ -117,7 +117,6 @@ class GoTokenizer {
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
       tokens = new scope.BracketScope().process(tokens);
-      // tokens = new scope.CPrecompileScope().process(tokens);
       tokens = new scope.GoScope().process(tokens);
       return tokens;
    }
