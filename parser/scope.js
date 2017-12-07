@@ -6,6 +6,14 @@ const SEARCH_ATTRIBUTE = { key: 'token', left: '[', right: ']' };
 const SEARCH_BLOCK = { key: 'token', left: '{', right: '}' };
 const SEARCH_PARAM = { key: 'token', left: '(', right: ')' };
 
+const TYPE_RUBY = { module: 'namespace', class: 'class', def: 'function' };
+const TYPE_PYTHON = { class: 'class', def: 'function' };
+const TYPE_GO = { struct: 'class', interface: 'class', func: 'function' };
+const TYPE_JAVASCRIPT = { class: 'class', function: 'function' };
+const TYPE_JAVA = { class: 'class', interface: 'class', function: 'function' };
+const TYPE_CSHARP = { namespace: 'namespace', class: 'class', function: 'function' };
+const TYPE_C = { namespace: 'namespace', class: 'class', struct: 'class', function: 'function' };
+
 function clear_bracket_attr(x) {
    delete x.startIndex;
    delete x.endIndex;
@@ -98,6 +106,7 @@ class RubyScope extends fsm.Feature {
                }
                env.block_stack.push(x);
                x.startIndex = env.input_i;
+               x.type = TYPE_RUBY[x.token];
                return true;
             }
             return false;
@@ -134,6 +143,8 @@ class PythonLambdaScope extends fsm.Feature {
          5, (output, x, env) => {
             utils.act_push_origin(output, x);
             env.lambda_stack.push(x);
+            x.name = '-';
+            x.type = TYPE_PYTHON.def;
             x.startIndex = output.length-1;
             x.bracketDeepth = env.bracket_stack.length;
          }, (x, env) => x.token === 'lambda', origin_state
@@ -233,9 +244,11 @@ class PythonScope extends fsm.Feature {
                   if (utils.contains(['class', 'def'], x.token)) {
                      env.named_block = x;
                      x.name = '';
+                     x.type = TYPE_PYTHON[x.token]
                   }
                   env.block_stack.push(x);
                   x.indentSize = env.indent_size;
+                  // startIndex is in token `def` always
                   if (env.annotation_start !== null) {
                      x.startIndex = env.annotation_start;
                      env.annotation_start = null;
@@ -457,6 +470,7 @@ class GoScope extends fsm.Feature {
             q.startIndex = st;
             q.endIndex = ed;
             q.name = name;
+            q.type = TYPE_GO[x.token];
          }, (x, env) => utils.contains(['struct', 'interface'], x.token), origin_state
       ));
 
@@ -533,6 +547,7 @@ class GoScope extends fsm.Feature {
             q.startIndex = st;
             q.endIndex = ed;
             q.name = name;
+            q.type = TYPE_GO.func;
          }, (x, env) => x.token === 'func', origin_state
       ));
       // interface function declare
@@ -712,13 +727,26 @@ class JavaScriptScope extends CLikeScope {
       origin_state.register_condition(new fsm.Condition(
          5, (output, x, env) => {
             utils.act_push_origin(output, x);
-            x.startIndex = env.input_i;
-            let p = env.input_i+1, q;
+            let p, q;
+            p = env.input_i-1;
+            p = utils.search_prev(env.input, p, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            // a.class = 1;
+            if (p < env.input.length && env.input[p].token === '.') {
+               return;
+            }
+            p = env.input_i+1;
             p = utils.search_next(env.input, p, utils.SEARCH_SKIPSPACEN);
             p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            // a = {class: 'type'}
+            if (p < env.input.length && env.input[p].token === ':') {
+               return;
+            }
             x.name = env.input[p].token;
             p = utils.search_next(env.input, p+1, { key: 'token', stop: ['{'] });
+            x.startIndex = env.input_i;
             x.endIndex = env.input[p].endIndex;
+            x.type = TYPE_JAVASCRIPT.class;
             clear_bracket_attr(env.input[p]);
          }, (x, env) => x.token === 'class', origin_state
       ));
@@ -726,10 +754,18 @@ class JavaScriptScope extends CLikeScope {
       origin_state.register_condition(new fsm.Condition(
          5, (output, x, env) => {
             utils.act_push_origin(output, x);
-            x.startIndex = env.input_i;
-            let p = env.input_i+1, q;
+            let p, q;
+            // a.function = 1;
+            if (p < env.input.length && env.input[p].token === '.') {
+               return;
+            }
+            p = env.input_i+1;
             p = utils.search_next(env.input, p, utils.SEARCH_SKIPSPACEN);
             p = skip_next_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            // a = {function:'type'};
+            if (p < env.input.length && env.input[p].token === ':') {
+               return;
+            }
             if (env.input[p].token !== '(') {
                // e.g. function hello, function $query
                q = utils.search_next(env.input, p+1, { key: 'token', stop: ['('] });
@@ -740,7 +776,9 @@ class JavaScriptScope extends CLikeScope {
             q = env.input[p].endIndex;
             clear_bracket_attr(env.input[p]);
             p = utils.search_next(env.input, q+1, { key: 'token', stop: ['{'] });
+            x.startIndex = env.input_i;
             x.endIndex = env.input[p].endIndex;
+            x.type = TYPE_JAVASCRIPT.function;
             clear_bracket_attr(env.input[p]);
          }, (x, env) => x.token === 'function', origin_state
       ));
@@ -771,6 +809,7 @@ class JavaScriptScope extends CLikeScope {
                   x.endIndex = q;
                }
                x.name = '-';
+               x.type = TYPE_JAVASCRIPT.function;
             } else if (env.input[p].token === '{') {
                // class function
                q = utils.search_prev(env.input, x.startIndex-1, utils.SEARCH_SKIPSPACEN);
@@ -778,6 +817,7 @@ class JavaScriptScope extends CLikeScope {
                if (q >= 0 && !utils.contains(utils.common_stops, env.input[q].token && !env.input[q].tag)) {
                   env.input[q].startIndex = q;
                   env.input[q].endIndex = env.input[p].endIndex;
+                  env.input[q].type = TYPE_JAVASCRIPT.function;
                   clear_bracket_attr(env.input[p]);
                }
                clear_bracket_attr(x);
@@ -865,6 +905,7 @@ class JavaScope extends CLikeScope {
                // (event) -> event.trigger()
                x.java_parent.endIndex = x.endIndex;
                x.java_parent.name = '-';
+               x.java_parent.type = TYPE_JAVA.function;
                delete x.java_parent;
             } else {
                // event -> event.trigger()
@@ -873,6 +914,7 @@ class JavaScope extends CLikeScope {
                env.input[p].startIndex = p;
                env.input[p].endIndex = x.endIndex;
                env.input[p].name = '-';
+               env.input[p].type = TYPE_JAVA.function;
             }
             clear_bracket_attr(x);
          }, (x, env) => {
@@ -992,6 +1034,7 @@ class JavaScope extends CLikeScope {
             }
             q.endIndex = x.endIndex;
             q.name = name;
+            q.type = TYPE_JAVA.function;
             clear_bracket_attr(x);
          }, (x, env) => x.token === '(' && x.startIndex >= 0, origin_state)
       );
@@ -1036,6 +1079,7 @@ class JavaScope extends CLikeScope {
             if (env.input[st].java_parent) {
                env.input[st].java_parent.name = name;
                env.input[st].java_parent.endIndex = ed;
+               if (TYPE_JAVA[x.token]) env.input[st].java_parent.type = TYPE_JAVA[x.token];
                delete env.input[st].java_parent;
             } else {
                env.input[st].startIndex = st;
@@ -1155,6 +1199,7 @@ class CsharpScope extends CLikeScope {
                p.startIndex = q;
             }
             p.name = '-';
+            p.type = TYPE_CSHARP.function;
             p.endIndex = ed;
          }, (x, env) => {
             if (x.token !== '>') return false;
@@ -1235,6 +1280,7 @@ class CsharpScope extends CLikeScope {
             q.startIndex = p;
             q.endIndex = ed;
             q.name = name;
+            q.type = TYPE_CSHARP.function;
          }, (x, env) => x.token === '(' && x.startIndex >= 0, origin_state
       ));
 
@@ -1287,6 +1333,7 @@ class CsharpScope extends CLikeScope {
             q.startIndex = st;
             q.endIndex = ed;
             q.name = name;
+            if (TYPE_CSHARP[x.token]) q.type = TYPE_CSHARP[x.token];
          }, (x, env) => utils.contains(['class', 'struct', 'interface', 'namespace', 'enum'], x.token), origin_state
       ));
       // delegate { ... }
@@ -1337,6 +1384,7 @@ class CsharpScope extends CLikeScope {
                q.startIndex = p;
                q.endIndex = ed;
                q.name = '[]';
+               q.type = TYPE_CSHARP.function;
                return;
             }
          }, (x, env) => x.token === '[', origin_state
@@ -1480,7 +1528,8 @@ class CScope extends fsm.Feature {
       ));
       origin_state.register_condition(new fsm.Condition(
          5, (output, x, env) => {
-            let p, q, name, fnptr;
+            let p, q, name, fnptr, type;
+            type = null;
             p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACEN);
             p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
             if (p < 0) {
@@ -1531,6 +1580,7 @@ class CScope extends fsm.Feature {
                }
                // parse type
                p = detect_type_name_prev(env.input, p);
+               type = TYPE_C.function;
             } else if (utils.contains(['do', 'try', 'catch', 'finally', 'else', '__asm'], env.input[p].token)) {
                return;
             } else {
@@ -1539,6 +1589,7 @@ class CScope extends fsm.Feature {
                name = q.name;
                p = q.index;
                if (env.input[p].token !== 'class') return;
+               type = TYPE_C.class;
             }
             // template
             p = detect_template_prev(env.input, p);
@@ -1547,6 +1598,7 @@ class CScope extends fsm.Feature {
             p = utils.search_pair_next(env.input, env.input_i, SEARCH_BLOCK);
             q.endIndex = p;
             q.name = name;
+            if (type) q.type = type;
          }, (x, env) => x.token === '{', origin_state
       ));
 
