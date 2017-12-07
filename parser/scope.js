@@ -1431,11 +1431,299 @@ class CsharpScope extends CLikeScope {
    }
 }
 
-class CScope extends CLikeScope {
+class CScope extends fsm.Feature {
    constructor() {
-      // after BracketScope
-      super(detect_end_of_statement);
-      let origin_state = this.state.origin;
+      // after CPrecompileScope
+      super();
+      /* FIXME: not support:
+         #define A {
+         #define B }
+         int hello() A B
+         --------------
+         int hello() {
+         #ifdef A
+            return 0;
+         }
+         #else
+            return -1;
+         }
+         --------------
+         #define FNAME(x) fn_##x
+         void FNAME(test) {}
+         --------------
+         class std::Test {};
+         --------------
+         - nested function pointer
+      */
+      // currently only support class, function
+      let origin_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      let preprocessor_state = new fsm.State(new fsm.Condition(
+         0, utils.act_push_origin, utils.always
+      ));
+      this.register_state('origin', origin_state);
+      this.register_state('preprocess', preprocessor_state);
+      this.set_entry('origin');
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            utils.act_push_origin(output, x);
+            env.elem = x;
+         }, (x, env) => x.preprocess, preprocessor_state
+      ));
+      preprocessor_state.register_condition(new fsm.Condition(
+         5, utils.act_push_origin, (x, env) => {
+            if (env.elem.preprocess.jumpIndex-1 > env.input_i) return false;
+            delete env.elem;
+            return true;
+         }, origin_state
+      ));
+      origin_state.register_condition(new fsm.Condition(
+         5, (output, x, env) => {
+            let p, q, name, fnptr;
+            p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+            if (p < 0) {
+               return;
+            }
+            if (env.input[p].token === ')') {
+               fnptr = false;
+               p = detect_init_n_extends(env.input, p);
+               p = utils.search_pair_prev(env.input, p, SEARCH_PARAM);
+               p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+               p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+               if (p < 0 || utils.contains(['if', 'for', 'while', 'catch', 'switch'], env.input[p].token)) {
+                  return;
+               }
+               if (env.input[p].token === ')') {
+                  // return function ptr, e.g.
+                  // int (*f(int x))(int, float) {}
+                  //               ^
+                  // A* A::operator()(A* x) {}
+                  //                ^
+                  q = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                  q = skip_prev_comment(env.input, q, utils.SEARCH_SKIPSPACEN);
+                  if (!env.input[q]) {
+                     return;
+                  } else if (env.input[q].token === ')') {
+                     //              v
+                     // int (*f(int x))(int, float) {}
+                     fnptr = true;
+                     p = utils.search_pair_prev(env.input, q, SEARCH_PARAM);
+                     p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+                     p = skip_prev_comment(env.input, p, utils.SEARCH_SKIPSPACEN);
+                  } else if (env.input[q].token === '(') {
+                     //               v
+                     // A* A::operator()(A* x) {}
+                  } else {
+                     return;
+                  }
+               }
+               // parse function name
+               q = detect_function_name(env.input, p);
+               name = q.name;
+               p = q.index;
+               if (fnptr) {
+                  //     v|
+                  // int (*f(int x))(int, float) {}
+                  p = utils.search_prev(env.input, p-1, { key:'token', stop:'(' });
+                  p--;
+               }
+               // parse type
+               p = detect_type_name_prev(env.input, p);
+            } else if (utils.contains(['do', 'try', 'catch', 'finally', 'else', '__asm'], env.input[p].token)) {
+               return;
+            } else {
+               // e.g. class A {};
+               q = detect_class_name(env.input, p);
+               name = q.name;
+               p = q.index;
+               if (env.input[p].token !== 'class') return;
+            }
+            // template
+            p = detect_template_prev(env.input, p);
+            q = env.input[p];
+            q.startIndex = p;
+            p = utils.search_pair_next(env.input, env.input_i, SEARCH_BLOCK);
+            q.endIndex = p;
+            q.name = name;
+         }, (x, env) => x.token === '{', origin_state
+      ));
+
+      function detect_init_n_extends(input, index) {
+         //                           v--- index
+         // A::A() : x(const::XX), y(1) {}
+         // A::A() : ns::Base::t(const::XX) {}
+         // exclude A::test() {}
+         let p = index;
+         while(index >= 0 && input[index].token === ')') {
+            index = utils.search_pair_prev(input, index, SEARCH_PARAM);
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            // name
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            if (index < 0) break;
+            if (input[index].token === ',') {
+               index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+               continue;
+            }
+            if (input[index].token === ':') {
+               while (index-1 >= 0 && input[index-1].token === ':') {
+                  index = utils.search_prev(input, index-2, utils.SEARCH_SKIPSPACEN);
+                  index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+                  // class name
+                  index = utils.search_prev(input, index-2, utils.SEARCH_SKIPSPACEN);
+                  index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+               }
+               if (index >= 0 && input[index].token === ':') {
+                  index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+                  index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+                  // should be ')', maybe 'public', 'private', ...
+                  break;
+               } else {
+                  index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+                  index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+               }
+            }
+         }
+         if (index >= 0 && input[index].token === ')') {
+            return index;
+         } else {
+            return p;
+         }
+      }
+
+      function detect_template_prev(input, index) {
+         let p = index;
+         p = utils.search_prev(input, p-1, utils.SEARCH_SKIPSPACEN);
+         p = skip_prev_comment(input, p, utils.SEARCH_SKIPSPACEN);
+         if (p >= 0 && input[p].token === '>') {
+            p = utils.search_pair_prev(input, p, SEARCH_GENERICS);
+            p = utils.search_prev(input, p-1, utils.SEARCH_SKIPSPACEN);
+            p = skip_prev_comment(input, p, utils.SEARCH_SKIPSPACEN);
+            // should be 'template'
+            index = p;
+         }
+         return index;
+      }
+
+      function detect_type_name_prev(input, index) {
+         let p = index;
+         index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+         index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+         while (true) {
+            if (index < 0 || utils.contains([';', '{', '}'], input[index].token)) {
+               // e.g. ~A() {}
+               return p;
+            }
+            if (input[index].token === ':') {
+               // e.g. public: A() {}
+               // e.g. ns::B A() {}
+               if (index > 0 && input[index-1].token === ':') {
+                  index --;
+               } else {
+                  return p;
+               }
+            }
+            if (index >= 0 && input[index].tag !== utils.TAG_COMMENT) {
+               if (!utils.contains([' ', '\t', '\r', '\n'], input[index].token)) {
+                  p = index;
+               }
+            }
+            index --;
+         }
+      }
+
+      function detect_class_name(input, index) {
+         let p = index;
+         let name = input[index].token;
+         if (name === '>') {
+            index = utils.search_pair_prev(input, index, SEARCH_GENERICS);
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+         }
+         index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+         index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+         //         v--- search for
+         // class A : public ns::B::C, ns::D, protected E {...}
+         // public:class A {...}
+         if (index >= 0 && utils.contains(['public', 'protected', 'private', 'virtual'], input[index].token)) {
+            index = utils.search_prev(input, index-1, { key:'token', stop:[':'] });
+         }
+         while (index > 0 && input[index-1].token === ':') {
+            if (input[index].token === 'class') {
+               p = index;
+               break;
+            }
+            index = utils.search_prev(input, index-2, { key:'token', stop:[':'] });
+         }
+         if (input[index].token !== 'class') {
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            name = input[index].token;
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            while (index >= 0 && input[index].token === ':') {
+               // class ns::A {}
+               index = utils.search_prev(input, index-2, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            }
+         }
+         // should be class now
+         return { name, index };
+      }
+
+      function detect_function_name(input, index) {
+         let p;
+         let name = '';
+         if (utils.contains(utils.common_stops, input[index].token)) {
+            // e.g. A* operator delete[] (A** x) {}
+            while (input[index].token !== 'operator') {
+               name += input[index].token;
+               index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            }
+            name = name.trim();
+            p = index;
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+         } else {
+            name = input[index].token;
+            p = index;
+            index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+            index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            if (index >= 0 && input[index].token === 'operator') {
+               // e.g. A* A::operator new(A* x) {}
+               p = index;
+               index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            }
+            if (index >= 0 && input[index].token === '~') {
+               // e.g. A::~A() {}
+               name = '~' + name;
+               p = index;
+               index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            }
+         }
+         if (index >= 0 && input[index].token === ':') {
+            // e.g. void ns::A::test() {}
+            // exclude the case: public: A() {}
+            while (input[index-1].token === ':') {
+               // index-1 should be ':' as well
+               index = utils.search_prev(input, index-2, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+               // index is class name
+               p = index;
+               index = utils.search_prev(input, index-1, utils.SEARCH_SKIPSPACEN);
+               index = skip_prev_comment(input, index, utils.SEARCH_SKIPSPACEN);
+            }
+         }
+         index = p;
+         return { name, index };
+      }
 
       function detect_end_of_statement(input, index, env) {
          let i, n, ch;

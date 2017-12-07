@@ -69,8 +69,7 @@ class CTokenizer {
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer().process(tokens);
       tokens = new scope.CPrecompileScope().process(tokens);
-      //tokens = new scope.BracketScope().process(tokens);
-      //tokens = new scope.CScope().process(tokens);
+      tokens = new scope.CScope().process(tokens);
       return tokens;
    }
 }
