@@ -432,7 +432,6 @@ class GoScope extends fsm.Feature {
             } else {
                x.startIndex = env.input_i;
                x.endIndex = p;
-console.log(x.token, '-->', env.input_i, JSON.stringify(env.input.slice(x.startIndex, x.endIndex+1).map((z) => z.token).join('')));
             }
          }, (x, env) => utils.contains([
             'if', 'else', 'for', 'switch', 'select'
@@ -472,7 +471,6 @@ console.log(x.token, '-->', env.input_i, JSON.stringify(env.input.slice(x.startI
             q.endIndex = ed;
             q.name = name;
             q.type = TYPE_GO[x.token];
-console.log(x.token, q.name, '-->', JSON.stringify(env.input.slice(q.startIndex, q.endIndex+1).map((z) => z.token).join('')));
          }, (x, env) => utils.contains(['struct', 'interface'], x.token), origin_state
       ));
 
@@ -550,7 +548,6 @@ console.log(x.token, q.name, '-->', JSON.stringify(env.input.slice(q.startIndex,
             q.endIndex = ed;
             q.name = name;
             q.type = TYPE_GO.func;
-console.log('**', x.token, q.name, '-->', JSON.stringify(env.input.slice(q.startIndex, q.endIndex+1).map((z) => z.token).join('')));
          }, (x, env) => x.token === 'func', origin_state
       ));
       // interface function declare
@@ -577,7 +574,6 @@ console.log('**', x.token, q.name, '-->', JSON.stringify(env.input.slice(q.start
             q.startIndex = st;
             q.endIndex = ed;
             q.name = name;
-console.log('|>', x.token, q.name, '-->', JSON.stringify(env.input.slice(q.startIndex, q.endIndex+1).map((z) => z.token).join('')));
          }, (x, env) => x.token === '(', origin_state
       ));
 
@@ -624,7 +620,6 @@ class BracketScope extends fsm.Feature {
             env.block_stack.push(x);
             x.startIndex = env.input_i;
             x.bracketDeepth = env.block_stack.length;
-//console.log(x.token, x.bracketDeepth, env.input_i, JSON.stringify(env.input.slice(env.input_i-10, env.input_i).map(z => z.token)));
          }, (x, env) => {
             return utils.contains(env.starter, x.token);
          }, origin_state
@@ -634,7 +629,6 @@ class BracketScope extends fsm.Feature {
             utils.act_push_origin(output, x);
             let block = env.block_stack.pop();
             block.endIndex = env.input_i;
-//console.log(x.token, x.bracketDeepth, env.input_i, JSON.stringify(env.input.slice(env.input_i-10, env.input_i).map(z => z.token)));
          }, (x, env) => {
             return utils.contains(env.ender, x.token)
          }, origin_state
@@ -1212,7 +1206,6 @@ class CsharpScope extends CLikeScope {
             p.name = '-';
             p.type = TYPE_CSHARP.function;
             p.endIndex = ed;
-console.log(env.input.slice(p.startIndex, p.endIndex+1).map((x) => x.token).join(''));
          }, (x, env) => {
             if (x.token !== '>') return false;
             if (utils.prev(env.input, env.input_i, 'token') !== '=') return false;
@@ -1293,7 +1286,6 @@ console.log(env.input.slice(p.startIndex, p.endIndex+1).map((x) => x.token).join
             q.endIndex = ed;
             q.name = name;
             q.type = TYPE_CSHARP.function;
-console.log('+', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) => x.token).join(''));
          }, (x, env) => x.token === '(' && x.startIndex >= 0, origin_state
       ));
 
@@ -1312,7 +1304,6 @@ console.log('+', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) => 
                x.name = '-';
                x.startIndex = st;
                x.endIndex = env.input[p].endIndex;
-console.log(env.input.slice(x.startIndex, x.endIndex+1).map((z) => z.token).join(''));
                clear_bracket_attr(env.input[p]);
                return;
             } else if (name === ';') {
@@ -1348,7 +1339,6 @@ console.log(env.input.slice(x.startIndex, x.endIndex+1).map((z) => z.token).join
             q.endIndex = ed;
             q.name = name;
             if (TYPE_CSHARP[x.token]) q.type = TYPE_CSHARP[x.token];
-console.log('* ', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) => x.token).join(''));
          }, (x, env) => utils.contains(['class', 'struct', 'interface', 'namespace', 'enum'], x.token), origin_state
       ));
       // delegate { ... }
@@ -1368,7 +1358,6 @@ console.log('* ', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) =>
             x.startIndex = env.input_i;
             x.endIndex = env.input[p].endIndex;
             x.name = '-';
-console.log(env.input.slice(x.startIndex, x.endIndex+1).map((x) => x.token).join(''));
             clear_bracket_attr(env.input[p]);
          }, (x, env) => x.token === 'delegate', origin_state
       ));
@@ -1401,7 +1390,6 @@ console.log(env.input.slice(x.startIndex, x.endIndex+1).map((x) => x.token).join
                q.endIndex = ed;
                q.name = '[]';
                q.type = TYPE_CSHARP.function;
-console.log('++', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) => x.token).join(''));
                return;
             }
          }, (x, env) => x.token === '[', origin_state
@@ -1616,7 +1604,6 @@ class CScope extends fsm.Feature {
             q.endIndex = p;
             q.name = name;
             if (type) q.type = type;
-console.log('* ', q.name, env.input.slice(q.startIndex, q.endIndex+1).map((x) => x.token).join(''));
          }, (x, env) => x.token === '{', origin_state
       ));
 
