@@ -1044,7 +1044,7 @@ class JavaScope extends CLikeScope {
          }, (x, env) => x.token === '(' && x.startIndex >= 0, origin_state)
       );
 
-      // { for class and [@]interface
+      // class, [@]interface and enum
       origin_state.register_condition(new fsm.Condition(
          5, (output, x, env) => {
             utils.act_push_origin(output, x, env);
@@ -1090,6 +1090,7 @@ class JavaScope extends CLikeScope {
                env.input[st].startIndex = st;
                env.input[st].endIndex = ed;
                env.input[st].name = name;
+               env.input[st].type = TYPE_JAVA[x.token];
             }
          }, (x, env) => utils.contains(['class', 'interface', 'enum'], x.token), origin_state
       ));

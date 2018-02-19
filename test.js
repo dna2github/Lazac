@@ -10,13 +10,13 @@ let filename = process.argv[2] || 'test.js' && 'samples/test.c';
 let ext = process.argv[3];
 let tokens = null;
 
+let text = fs.readFileSync(filename).toString();
 if (ext) {
    switch(ext) {
-      case 'build_log': tokens = new log_tokenizer.BuildLogTokenizer().process(filename); break;
+      case 'log': tokens = new log_tokenizer.BuildLogTokenizer().process(text); break;
    }
 } else {
    ext = path.extname(filename);
-   let text = fs.readFileSync(filename).toString();
    switch (ext) {
       case '.c':
       case '.cc':

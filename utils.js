@@ -5,6 +5,16 @@ const common_stops = [
    '"', '\'', ',', '.', '<', '>', '/', '?', ' ', '\t', '\r', '\n'
 ];
 
+const common_stops_without_underscore = [
+   '~', '`', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
+   '-', '=', '+', '{', '}', '[', ']', '\\', '|', ':', ';',
+   '"', '\'', ',', '.', '<', '>', '/', '?', ' ', '\t', '\r', '\n'
+];
+
+const common_digit = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+const common_space = [' ', '\t', '\n', '\r'];
+
 const TAG_OTHER = 'other';
 const TAG_STRING = 'string';
 const TAG_COMMENT = 'comment';
@@ -12,7 +22,9 @@ const TAG_REGEX = 'regex';
 const TAG_INDENT = 'indent';
 
 const SEARCH_SKIPSPACE = { skip: [' ', '\t'], key: 'token' };
-const SEARCH_SKIPSPACEN = { skip: [' ', '\t', '\n', '\r'], key: 'token' };
+const SEARCH_SKIPSPACEN = { skip: common_space, key: 'token' };
+const SEARCH_STOPSPACE = { stop: [' ', '\t'], key: 'token' };
+const SEARCH_STOPSPACEN = { stop: common_space, key: 'token' };
 
 function act_concat(output, x) {
    let m = last(output);
@@ -21,6 +33,23 @@ function act_concat(output, x) {
 
 function act_push_origin (output, x) {
    output.push(x);
+}
+
+function act_harvest(output, x, env) {
+   let st = env.range.start, ed = env.range.end, cur = env.input_i;
+   let token = '';
+   for (let i = cur; i > st; i--) {
+      token = output.pop().token + token;
+   }
+   for (let i = cur; i <= ed; i++) {
+      token += env.input[i].token;
+   }
+   output.push({
+      token: token,
+      tag: env.range.tag
+   });
+   delete env.range;
+   return ed - cur + 1;
 }
 
 function act_push_origin_range (output, input, start, end) {
@@ -212,9 +241,15 @@ module.exports = {
    TAG_INDENT,
    SEARCH_SKIPSPACE,
    SEARCH_SKIPSPACEN,
+   SEARCH_STOPSPACE,
+   SEARCH_STOPSPACEN,
    common_stops,
+   common_stops_without_underscore,
+   common_space,
+   common_digit,
    act_concat,
    act_push_origin,
+   act_harvest,
    cmp_match_array,
    factory_text_cmp,
    text_cmp_1,
