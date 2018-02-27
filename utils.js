@@ -21,8 +21,8 @@ const TAG_COMMENT = 'comment';
 const TAG_REGEX = 'regex';
 const TAG_INDENT = 'indent';
 
-const SEARCH_SKIPSPACE = { skip: [' ', '\t'], key: 'token' };
-const SEARCH_SKIPSPACEN = { skip: common_space, key: 'token' };
+const SEARCH_SKIPSPACE = { skip: [' ', '\t'], key: 'token', skip_comment: true };
+const SEARCH_SKIPSPACEN = { skip: common_space, key: 'token', skip_comment: true };
 const SEARCH_STOPSPACE = { stop: [' ', '\t'], key: 'token' };
 const SEARCH_STOPSPACEN = { stop: common_space, key: 'token' };
 
@@ -135,19 +135,33 @@ function search_prev(array, index, options) {
    let skip = options.skip;
    let stop = options.stop;
    let key = options.key;
+   let skip_comment = options.skip_comment;
+   let stop_comment = options.stop_comment;
    if (skip) {
       while (index >= 0) {
          let value = array[index];
-         if (key) value = value[key];
-         if (!contains(skip, value)) {
-            return index;
+         if (key) {
+            if (skip_comment && value.tag === TAG_COMMENT) {
+               index --;
+               continue;
+            }
+            value = value[key];
          }
-         index --;
+         if (contains(skip, value)) {
+            index --;
+            continue;
+         }
+         return index;
       }
    } else if(stop) {
       while (index >= 0) {
          let value = array[index];
-         if (key) value = value[key];
+         if (key) {
+            if (stop_comment && value.tag === TAG_COMMENT) {
+               return index;
+            }
+            value = value[key];
+         }
          if (contains(stop, value)) {
             return index;
          }
@@ -163,10 +177,18 @@ function search_next(array, index, options) {
    let stop = options.stop;
    let key = options.key;
    let n = array.length;
+   let skip_comment = options.skip_comment;
+   let stop_comment = options.stop_comment;
    if (skip) {
       while (index < n) {
          let value = array[index];
-         if (key) value = value[key];
+         if (key) {
+            if (skip_comment && value.tag === TAG_COMMENT) {
+               index ++;
+               continue;
+            }
+            value = value[key];
+         }
          if (contains(skip, value)) {
             index ++;
             continue;
@@ -176,7 +198,12 @@ function search_next(array, index, options) {
    } else if(stop) {
       while (index < n) {
          let value = array[index];
-         if (key) value = value[key];
+         if (key) {
+            if (stop_comment && value.tag === TAG_COMMENT) {
+               return index;
+            }
+            value = value[key];
+         }
          if (contains(stop, value)) {
             return index;
          }

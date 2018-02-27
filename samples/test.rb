@@ -24,6 +24,9 @@ def b
       if y == 1
 end
 
+a = /te
+st/
+   puts a
 puts %-a-
 puts %q["mane"]
 puts %Q["mane"]
@@ -50,3 +53,8 @@ puts b, a_b_c_d
 puts %{
    hello
 }
+
+puts DATA
+
+__END__
+Hello World

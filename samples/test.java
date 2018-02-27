@@ -16,6 +16,8 @@ public static class X <T> {
    <T> void a7() {}
    public static <T> java.lang.String a8() { return ""; }
 
+   public void ArrayList<string> a8_1() {}
+
    @SuppressWarnings("xxx")
    @interface a9{}
 }
