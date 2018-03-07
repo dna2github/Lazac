@@ -936,9 +936,19 @@ class JavaScope extends CLikeScope {
                // however function call +a.test(1,2); match, process later
                x.endIndex = p;
             } else if (env.input[p].token !== '{') {
-               // standalone or function call
-               clear_bracket_attr(x);
-               return;
+               if (env.input[p].token === 'throws') {
+                  // e.g. public static int f(int x) throws Exception {}
+                  p = utils.search_next(env.input, p+1, {stop: [';', '{'], key: 'token'});
+                  if (env.input[p].token === '{') {
+                     x.endIndex = env.input[p].endIndex;
+                  } else {
+                     x.endIndex = p;
+                  }
+               } else {
+                  // standalone or function call
+                  clear_bracket_attr(x);
+                  return;
+               }
             } else {
                x.endIndex = env.input[p].endIndex;
             }
