@@ -1,5 +1,12 @@
+package test.test;
+
 @Deprecated
 public static class X <T> {
+   public final class Test {}
+   public interface T1<T> {}
+   public class T2 {
+      T1 t = new T1<Test>() {};
+   }
    void a1 () {}
    public void a2() {}
    static void a3() {}

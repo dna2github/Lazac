@@ -10,7 +10,7 @@ const TYPE_RUBY = { module: 'namespace', class: 'class', def: 'function' };
 const TYPE_PYTHON = { class: 'class', def: 'function' };
 const TYPE_GO = { struct: 'class', interface: 'class', func: 'function' };
 const TYPE_JAVASCRIPT = { class: 'class', function: 'function' };
-const TYPE_JAVA = { class: 'class', interface: 'class', function: 'function' };
+const TYPE_JAVA = { class: 'class', interface: 'class', function: 'function', interface_singleton: 'class_singleton' };
 const TYPE_CSHARP = { namespace: 'namespace', class: 'class', function: 'function' };
 const TYPE_C = { namespace: 'namespace', class: 'class', struct: 'class', function: 'function' };
 
@@ -961,6 +961,11 @@ class JavaScope extends CLikeScope {
                clear_bracket_attr(x);
                return;
             }
+            if (name === '>') {
+               // e.g. new Test<T> () { ... }
+               name = '';
+               p ++;
+            }
             // return type
             p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
             // e.g. int[][][]
@@ -985,8 +990,14 @@ class JavaScope extends CLikeScope {
                      // not generic
                      //       v--------v
                      // if (a < 1 && b > test()) doit();
-                     clear_bracket_attr(x);
-                     return;
+                     // but validate
+                     // - <A, B>
+                     // - <A::B>
+                     // - <A.B.C>
+                     if ([',', '.', ':'].indexOf(ch.token) < 0) {
+                        clear_bracket_attr(x);
+                        return;
+                     }
                   } else if (utils.contains([
                      'if', 'else', 'switch', 'case', 'default', 'for', 'while', 'do', 'return',
                      'const', 'let', 'var', 'break', 'continue', 'export', 'import',
@@ -1006,11 +1017,25 @@ class JavaScope extends CLikeScope {
                }
                p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
             }
+            if (!name) {
+               p = utils.search_prev(env.input, p-1, utils.SEARCH_SKIPSPACEN);
+            }
             // function call +test(1,2); a[0].test(1,2); ...
             if (p >= 0 && utils.contains(utils.common_stops, env.input[p].token)) {
                clear_bracket_attr(x);
                return;
-            } else if (p >= 0 && utils.contains(['return', 'new'], env.input[p].token)) {
+            } else if (p >= 0 && env.input[p].token === 'new') {
+               if (env.input[x.endIndex].token === '}') {
+                  // new Interface() { ... }
+                  q = env.input[p];
+                  q.name = '';
+                  q.startIndex = p;
+                  q.endIndex = x.endIndex;
+                  q.type = TYPE_JAVA.interface_singleton;
+               }
+               clear_bracket_attr(x);
+               return;
+            } else if (p >= 0 && utils.contains(['return', 'throw'], env.input[p].token)) {
                clear_bracket_attr(x);
                return;
             }
@@ -1028,7 +1053,8 @@ class JavaScope extends CLikeScope {
                p = utils.search_pair_prev(env.input, q, SEARCH_GENERICS);
             }
             p = match_modifier_prev(env.input, q, [
-               'public', 'private', 'protected', 'static', 'native', 'synchronous', 'transient'
+               'public', 'private', 'protected', 'static', 'native',
+               'synchronous', 'transient', 'final', 'volatile'
             ]);
             if (env.input[p].java_parent) {
                q = env.input[p].java_parent;
@@ -1076,7 +1102,7 @@ class JavaScope extends CLikeScope {
                p = st;
             }
             st = match_modifier_prev(env.input, p, [
-               'public', 'private', 'protected', 'static', 'abstract'
+               'public', 'private', 'protected', 'static', 'abstract', 'final'
             ]);
             if (p === st && env.input[p].token === '@') {
                p = st + 1;

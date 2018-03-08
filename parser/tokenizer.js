@@ -121,6 +121,7 @@ class GoTokenizer {
    }
 }
 
+const i_decorator_java = require('./decorator/java');
 class JavaTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
@@ -140,6 +141,12 @@ class JavaTokenizer {
       tokens = new SymbolTokenizer().process(tokens);
       tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.JavaScope().process(tokens);
+      let info = i_decorator_java.decorate(tokens);
+      tokens.push({
+         tag: utils.TAG_COMMENT,
+         token: '',
+         info: info
+      });
       return tokens;
    }
 }
