@@ -237,6 +237,7 @@ class PythonTokenizer {
    }
 }
 
+const i_decorator_ruby = require('./decorator/ruby');
 class RubyTokenizer {
    constructor() {
       this.parser = new fsm.FeatureRoot();
@@ -262,6 +263,12 @@ class RubyTokenizer {
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer(['_', '@']).process(tokens);
       tokens = new scope.RubyScope().process(tokens);
+      let info = i_decorator_ruby.decorate(tokens);
+      tokens.push({
+         tag: utils.TAG_COMMENT,
+         token: '',
+         info: info
+      });
       return tokens;
    }
 }

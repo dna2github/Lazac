@@ -12,6 +12,7 @@ function is_space(token) {
 
 function decorate_feature(env, features) {
    if (!features) return 0;
+   if (!Array.isArray(features)) return 0;
    let i, n, r;
    for (i = 0, n = features.length; i < n; i++) {
       r = features[i](env);

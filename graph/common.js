@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-/* graph = {nodes: { id, node }, autoid} */
+/* graph = {nodes: { id: node }, autoid} */
 
 function create() {
    return { nodes: {}, autoid: 0 };

@@ -6,13 +6,24 @@ const java_decorate_feature = {
    'import': [decorate_import]
 };
 
+function decorate_element(env, token) {
+   if (token.tag == i_utils.TAG_STRING) {
+      if (!env.output.strings) env.output.strings = [];
+      env.output.strings.push(env.cursor);
+   }
+}
+
 function decorate_bracket(env) {
    if (env.endIndex && env.endIndex <= env.cursor) {
       // skip remains, focus on scope
       return env.tokens.length - env.cursor;
    }
    let token = env.tokens[env.cursor];
+   decorate_element(env, token);
    if (!token.type) return 0;
+   if (!isNaN(env.startIndex) && env.cursor <= env.startIndex) {
+      return 0;
+   }
    let output = {
       startIndex: token.startIndex,
       endIndex: token.endIndex,
@@ -22,9 +33,10 @@ function decorate_bracket(env) {
    i_common.decorate_scope({
       output: output,
       tokens: env.tokens,
-      cursor: token.startIndex+1,
+      cursor: token.startIndex,
+      startIndex: token.startIndex,
       endIndex: token.endIndex
-   }, {/* no package and import */}, decorate_bracket);
+   }, java_decorate_feature, decorate_bracket);
    if (!env.output.scopes) env.output.scopes = {};
    if (!env.output.scopes[token.name]) env.output.scopes[token.name] = [];
    env.output.scopes[token.name].push(output);
