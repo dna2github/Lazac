@@ -30,6 +30,14 @@ function tokenize(filename) {
    return tokens;
 }
 
+function generate_token_filename(lazac_dir, id) {
+   let d = id % 100, c = ~~(id / 100), b = ~~(c / 100), a = ~~(b / 100);
+   c %= 100;
+   b %= 100;
+   a %= 100;
+   return i_path.join(lazac_dir, `${a}`, `${b}`, `${c}`, `${d}.json`);
+}
+
 const lazac_ignore = ['.lazac', '.git', 'node_modules', '.env', 'gems'];
 const base_dir = i_path.resolve(process.argv[2]);
 const lazac_dir = i_path.join(base_dir, '.lazac');
@@ -40,21 +48,37 @@ const files = i_storage.list_files(base_dir, (name) => {
 }).filter((filename) => filename.endsWith('.rb'));
 
 let filename_map = {};
+let map_filename = i_path.join(lazac_dir, 'map.json');
+if (i_fs.existsSync(map_filename)) {
+   filename_map = JSON.parse(i_fs.readFileSync(map_filename));
+}
+let file_index = 1;
+if (Object.values(filename_map).length > 0) {
+   file_index = Object.values(filename_map).map((filename) => {
+      let d = i_path.basename(filename), c = i_path.dirname(filename);
+      let b = i_path.dirname(c), a = i_path.dirname(b);
+      c = i_path.basename(c);
+      b = i_path.basename(b);
+      a = i_path.basename(a);
+      d = d.split('.')[0];
+      return parseInt(a)*1000000 + parseInt(b) * 10000 + parseInt(c)*100 + parseInt(d);
+   }).reduce((x,y) => x>y?x:y)+1;
+}
 
 let index_dir = i_path.join(lazac_dir, 'string_index');
 i_storage.make_directory(index_dir);
 let engine = i_string_index.createEngine();
 
 console.log('Find ' + files.length + ' files ...');
-files.forEach((filename, index) => {
+files.forEach((filename) => {
    let repo_filename = filename.substring(base_dir.length);
-   let id = index + 1;
-   console.log('  - processing ' + id + ' "' + filename + '"');
-   let d = id % 100, c = ~~(id / 100), b = ~~(c / 100), a = ~~(b / 100);
-   c %= 100;
-   b %= 100;
-   a %= 100;
-   let token_real_filename = i_path.join(lazac_dir, `${a}`, `${b}`, `${c}`, `${d}.json`);
+   let token_real_filename;
+   if (filename_map[repo_filename]) {
+      token_real_filename = i_path.join(base_dir, filename_map[repo_filename].substring(1));
+   } else {
+      token_real_filename = generate_token_filename(lazac_dir, file_index++);
+   }
+   console.log('  - processing "' + filename + '"');
    i_storage.make_directory(i_path.dirname(token_real_filename));
    let token_filename = token_real_filename.substring(base_dir.length);
    filename_map[repo_filename] = token_filename;
