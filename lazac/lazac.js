@@ -87,7 +87,8 @@ files.forEach((filename) => {
       if (token.tag !== i_utils.TAG_STRING) return;
       i_string_index.addDocument(engine, {
          index: token_index,
-         filename: repo_filename
+         filename: repo_filename,
+         value: token.token
       }, i_string_index.tokenize(token.token));
    });
    i_fs.writeFileSync(token_real_filename, JSON.stringify(tokens));
