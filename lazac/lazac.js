@@ -83,11 +83,14 @@ files.forEach((filename) => {
    let token_filename = token_real_filename.substring(base_dir.length);
    filename_map[repo_filename] = token_filename;
    let tokens = tokenize(filename);
+   let line_no = 1;
    tokens.forEach((token, token_index) => {
+      line_no += token.token.split('\n').length-1;
       if (token.tag !== i_utils.TAG_STRING) return;
       i_string_index.addDocument(engine, {
          index: token_index,
          filename: repo_filename,
+         line_no: line_no,
          value: token.token
       }, i_string_index.tokenize(token.token));
    });
