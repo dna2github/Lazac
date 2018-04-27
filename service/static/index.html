@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+
+<head>
+   <meta charset='utf-8'>
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+   <link rel="stylesheet" href="css/clarity-ui.min.css">
+   <title>Lazac</title>
+   <style>
+      div.content-container {
+         position: absolute;
+         top: 50%;
+         transform: translateY(-50%);
+         width: 100%;
+         padding-left: 20px;
+         padding-right: 20px;
+      }
+      #panel_search {
+         margin-top: 10px;
+      }
+      .origin_line {
+         font-weight: bold;
+         font-size: 14px;
+         margin: 2px 5px;
+         border: 1px solid;
+         border: none;
+         border-left: 5px solid #10ff00;
+         padding: 2px;
+         background-color: #e8ffe7;
+      }
+      .match_line {
+         margin: 0px 5px 0px 10px;
+      }
+   </style>
+</head>
+
+<body>
+   <header class="header header-6">
+      <div class="branding">
+         <i class="clr-icon vm-bug" size="36" style="margin-top:12px;"></i>
+         <span class="title">Lazac</span>
+      </div>
+   </header>
+   <div id="panel_search" class="container-fluid">
+      <div class="content-area">
+         <section class="form-block">
+            <textarea id="txt_search" rows="10" class="form-control"></textarea>
+            <div class="text-center">
+               <button id="btn_search" class="btn btn-primary">Search</button>
+            </div>
+         </section>
+      </div>
+   </div>
+   <div class="container-fluid matchbox" id="panel_result">
+   </div>
+   <script src="js/clarity-icons.min.js"></script>
+   <script src="js/clarity-icons-helper.js"></script>
+   <script>
+      const data = {
+         lines: null,
+         tasks: null
+      };
+      var searcher = new WebSocket(
+         (window.location.protocol==='http:'?'ws://':'wss://') +
+         window.location.host + '/ws'
+      );
+      searcher.addEventListener('message', function (evt) {
+         data.task.html = JSON.parse(evt.data);
+         data.task.dom.children[0].classList.add('origin_line');
+         let x = 0;
+         switch(x) {
+            default:
+            if (!data.task.html.doc_set.length) break;
+            if (similar_scores(
+               data.task.html.doc_set[0],
+               data.task.html.doc_set[1],
+               data.task.html.doc_set[2]
+            )) break;
+            data.task.html.doc_set.forEach(function (x) {
+               let tmp = document.createElement('div'), tmpspan;
+               tmpspan = document.createElement('div');
+               tmpspan.classList.add('match_line');
+               tmpspan.innerHTML = '<span class="badge">' + ((~~(x.score*100))/100) + '</span>';
+               tmpspan.appendChild(document.createTextNode('[' + x.meta.filename + ':#' + x.meta.line_no + ']'));
+               tmp.appendChild(tmpspan);
+               tmpspan = document.createElement('div');
+               tmpspan.classList.add('match_line');
+               tmpspan.appendChild(document.createTextNode(x.meta.value));
+               tmp.appendChild(tmpspan);
+               data.task.dom.appendChild(tmp);
+            });
+            data.task.dom.innerHTML += '\n';
+         }
+         setTimeout(do_line_search, 0);
+      });
+
+      var panel_result = document.querySelector('#panel_result');
+      var btn_search = document.querySelector('#btn_search');
+      var txt_search = document.querySelector('#txt_search');
+      btn_search.addEventListener('click', function (evt) {
+         do_search('nimbus', txt_search.value);
+      });
+
+      function do_search(repository, search) {
+         panel_result.innerHTML = '';
+         data.lines = search.split('\n').map(function (x) {
+            let line = x;
+            let dom = document.createElement('div');
+            let tmp = document.createElement('div');
+            tmp.appendChild(document.createTextNode(line));
+            dom.appendChild(tmp);
+            panel_result.appendChild(dom);
+            return {
+               repository: repository,
+               line: line,
+               dom: dom,
+               html: null
+            };
+         });
+         setTimeout(do_line_search, 0);
+      }
+
+      function do_line_search() {
+         let task = data.lines.filter(function (x) { return x.line && !x.html; })[0];
+         if (!task) {
+            // all done
+            console.log(data.lines);
+            data.lines.forEach(function (x) {
+               delete x.dom;
+            });
+            return;
+         }
+         data.task = task;
+         searcher.send(JSON.stringify({
+            command: 'search',
+            value: {
+               repository: task.repository,
+               search: task.line && task.line.trim()
+            }
+         }));
+      }
+
+      function similar_scores(a, b, c) {
+         if (!a) return false;
+         if (!b) return false;
+         let r = Math.abs(a.score - b.score)/a.score < 0.05;
+         if (!c) return r;
+         return r && (Math.abs(a.score - c.score)/a.score < 0.05);
+      }
+   </script>
+</body>
+
+</html>

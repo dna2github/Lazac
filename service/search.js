@@ -1,24 +1,7 @@
 const i_path = require('path');
 const i_fs = require('fs');
+const i_cure = require('../indexer/cure');
 const i_string_index = require('../indexer/string_index');
-
-let base_dir = process.argv[2];
-let query = process.argv[3];
-if (i_fs.existsSync(query)) {
-   query = i_fs.readFileSync(query).toString();
-}
-let index_dir = i_path.join(base_dir, '.lazac', 'string_index');
-
-let map_filename = i_path.join(base_dir, '.lazac', 'map.json');
-let token_filename_map = JSON.parse(i_fs.readFileSync(map_filename));
-
-function get_string(doc, map) {
-   let filename = doc.meta.filename;
-   let token_filename = i_path.join(base_dir, map[filename]);
-   if (!i_fs.existsSync(token_filename)) return;
-   let tokens = JSON.parse(i_fs.readFileSync(token_filename));
-   doc.meta.value = tokens[doc.meta.index].token;
-}
 
 function lcs_dense(t1, t2, dense) {
    let i, n;
@@ -113,7 +96,7 @@ function score(engine, tokens, doc_set) {
 }
 
 function search_line(engine, line, topN) {
-   let tokens = i_string_index.tokenize(line);
+   let tokens = i_string_index.tokenize(i_cure.cure(line));
    let doc_set = i_string_index.search(engine, tokens);
    score(engine, tokens, doc_set);
    doc_set = Object.keys(doc_set).map((doc_id) => {
@@ -125,8 +108,6 @@ function search_line(engine, line, topN) {
    }).sort((x, y) => y.score - x.score).slice(0, topN);
 
    doc_set.forEach((doc) => {
-      // if string not stored in doc meta
-      // get_string(doc, token_filename_map);
       let rate = {value: 0, dense: 0};
       // lcs(value, query) / query * ( query / value )
       if (line && doc.meta.value) {
@@ -143,17 +124,29 @@ function search_line(engine, line, topN) {
       }
       doc.dense = rate.dense;
       doc.score *= rate.value / (line.length + doc.meta.value.length);
+      if (doc.meta.value.indexOf('\n') >= 0) {
+         doc.score /= doc.meta.value.split('\n').length;
+      }
    });
    doc_set = doc_set.sort((x, y) => y.score - x.score).slice(0, 3);
    let avg = 0;
    if (doc_set.length) avg = doc_set.map((x) => x.score).reduce((x,y) => x+y) / doc_set.length;
-   console.log('------------------------------', avg);
-   console.log(line);
-   console.log(JSON.stringify(doc_set, null, 3));
-   console.log('==============================');
+   // warning: avg is not used.
+   return doc_set;
 }
 
-let engine = i_string_index.readEngine(index_dir);
-query.split('\n').forEach((line) => {
-   if (line) search_line(engine, line, 500);
-});
+function load_engine_into_memory(base_dir) {
+   let index_dir = i_path.join(base_dir, '.lazac', 'string_index');
+   let engine = i_string_index.readEngine(index_dir);
+   return engine;
+}
+
+function query(engine, line) {
+   // lines.split('\n');
+   return search_line(engine, line, 500);
+}
+
+module.exports = {
+   load_engine_into_memory,
+   query
+};
