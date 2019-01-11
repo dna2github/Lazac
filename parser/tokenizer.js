@@ -207,7 +207,6 @@ class JavaScriptTokenizer {
       let input = new WordTokenizer().process(text);
       let tokens = this.parser.process(input);
       tokens = new SymbolTokenizer(['_', '$']).process(tokens);
-      console.log(JSON.stringify(tokens, null, 3));
       tokens = new scope.BracketScope().process(tokens);
       tokens = new scope.JavaScriptScope().process(tokens);
       return tokens;
