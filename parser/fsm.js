@@ -234,39 +234,52 @@ class FeatureCommonString extends Feature {
                token: x.token,
                tag: utils.TAG_REGEX
             });
-            env.stop_mark = x.token;
          }, (x, env) => {
             if (!utils.contains(this.marks, x.token)) return false;
             if (extra_check_fn && !extra_check_fn(x, env)) {
                return false;
             }
-            let i, n;
-            let p = utils.search_prev(env.input, env.input_i-1, utils.SEARCH_SKIPSPACEN);
-            if (p >= 0 && utils.contains([')', ']', '}'], env.input[p].token)) return false;
-            p = -1;
+            let i, n, t;
+            let p = -1, last = null;
             for(i = env.input_i+1, n = env.input.length; i < n; i++) {
-               if (env.input[i].token === '\\') {
+               t = env.input[i];
+               if (t.token === '\\') {
                   i ++; continue;
                }
-               if (env.input[i].token === '\n') return false;
-               if (env.input[i].token === '/') {
-                  p = utils.search_next(env.input, i+1, utils.SEARCH_SKIPSPACE);
-                  break;
+               if (t.token === '\n') return false;
+               if (t.token === '[') {
+                  last = '['; continue;
+               }
+               if (t.token === ']' && last === '[') {
+                  last = null; continue;
+               }
+               if (!last && t.token === '/') {
+                  env.stop_index = i; p = i + 1; break;
                }
             }
             if (p < 0) return false;
-            if (i+1 === p && utils.contains(['g', 'i', 'gi', 'ig'], env.input[p].token)) {
-               p = utils.search_next(env.input, p+1, utils.SEARCH_SKIPSPACE);
+            t = env.input[p];
+            i = p;
+            while(/[a-z]+/.test(t.token) && p < n) {
+               env.stop_index = p++;
+               if (!check_regex_flags(t.token)) {
+                  env.stop_index = i;
+                  p = i;
+                  break;
+               }
+               t = env.input[p];
             }
-            if (p < 0) return false;
+            p = utils.search_next(env.input, env.stop_index+1, utils.SEARCH_SKIPSPACE);
             p = env.input[p];
             if (utils.contains(['\n', ')', ']', '}', '\r'], p.token)) return true;
             if (!utils.contains(['.', ';', ','], p.token)) return false;
+
             p = utils.search_prev(env.output, env.output.length-1, utils.SEARCH_SKIPSPACE);
             while (p >= 0 && env.output[p].tag === utils.TAG_COMMENT) {
                p = utils.search_prev(env.output, p-1, utils.SEARCH_SKIPSPACE);
             }
-            if (p === -1) return true; // SOF/test/.test('test')
+            // symbol/test/.test('test'), the first "/" will be parsed as division op
+            if (p === -1) return true;
             p = env.output[p];
             if (utils.contains(utils.common_stops, p.token)) return true;
             if (utils.contains(regex_can_follow_keywords, p.token)) return true;
@@ -278,10 +291,16 @@ class FeatureCommonString extends Feature {
             utils.act_concat(output, x);
             env.stop_mark = null;
          }, (x, env) => {
-            return env.stop_mark === x.token;
+            return env.stop_index === env.input_i;
          }, epsilon
       ));
       return feature;
+
+      function check_regex_flags(symbol) {
+         const available = { g: 1, i: 1, m: 1, s: 1, u: 1, y: 1 };
+         let flag = symbol.split('');
+         return flag.map((x) => !!available[x]).reduce((x, y) => x && y);
+      }
    }
 }
 
