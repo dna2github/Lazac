@@ -54,9 +54,81 @@ function extract_string(env, start, end, escape_on) {
    };
 }
 
-function extract_regex(env) {
-   // e.g. /^test$/gi
-   return null;
+const regex_sufix = ['g', 'i', 'm', 's', 'u', 'y'];
+function extract_regex(env, keywords) {
+   // e.g. /^test$/gi, /[/]/
+   // a=/regex/;   true && /regex/i.test()   replace(/regex/g, '1');
+   let n = env.text.length;
+   let st = env.cursor;
+   let ed = env.text.indexOf('\n', st + 1);
+   if (ed < 0) ed = n;
+   let ed_pair = env.text.indexOf('/', st + 1);
+   if (ed_pair < 0) return null;
+   if (ed_pair > ed) return null;
+   // search before st, should not be a number or a symbol
+   //                   but can be a keyword (e.g. return)
+   let t;
+   let p = i_common.search_prev(
+      env.tokens, env.tokens.length-1,
+      (t) => i_common.space.indexOf(t.token) >= 0
+   );
+   if (p >= 0) {
+      t = env.tokens[p];
+      if (i_common.stops.indexOf(t.token) < 0) {
+         if (keywords && keywords.indexOf(t.token) < 0) {
+            return null;
+         }
+      }
+   }
+   // search for end position
+   let subenv = { text: env.text, cursor: -1 }
+   let pair_deep = 0;
+   let pair_ch = null;
+   let ed_found = false;
+   for (let i = env.cursor+1; i < n; i++) {
+      let ch = env.text.charAt(i);
+      switch (ch) {
+         case '[':
+         pair_ch = ']';
+         case '{':
+         pair_ch = pair_ch || '}';
+         subenv.cursor = i;
+         // no nest; e.g. /([A-Za-z0-9[\]]{2, 3})/
+         t = extract_string(subenv, ch, pair_ch, true);
+         i += t.token.length - 1;
+         break;
+         case '(':
+         pair_deep ++;
+         break;
+         case ')':
+         pair_deep --;
+         break;
+         case '\\':
+         i ++;
+         break;
+         case '/': // if pair_deep > 0, error
+         ed = i;
+         ed_found = true;
+         break;
+         case '\n': // error
+         ed = i-1;
+         ed_found = true;
+         break;
+      }
+      if (ed_found) break;
+   }
+   if (pair_deep) return null;
+   if (!ed_found) return null;
+   while(ed+1 < n) {
+      if (regex_sufix.indexOf(env.text.charAt(ed+1)) < 0) {
+         break;
+      }
+      ed ++;
+   }
+   return {
+      tag: i_common.TAG_REGEX,
+      token: env.text.substring(st, ed+1)
+   };
 }
 
 function extract_feature(env, features) {
@@ -102,6 +174,7 @@ module.exports = {
    extract_symbol,
    extract_comment,
    extract_string,
+   extract_regex,
    extract_feature,
    extract_tokens_feature_generator,
    extract_tokens
