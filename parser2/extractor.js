@@ -43,7 +43,7 @@ function extract_string(env, start, end, escape_on) {
       let ed_len = end.length, es_len = escape_on.length;
       while (ed >= 0) {
          ed = env.text.indexOf(end, ed);
-         if (env.text.substring(ed-es_len, ed) !== escape_on) break;
+         if (back_lookup(env.text, ed, escape_on) % 2 === 0) break;
          ed += ed_len;
       }
    }
@@ -52,6 +52,16 @@ function extract_string(env, start, end, escape_on) {
       tag: i_common.TAG_STRING,
       token: env.text.substring(st, ed)
    };
+
+   function back_lookup(text, index, chgroup) {
+      let count = 0;
+      let len = chgroup.length;
+      while (text.substring(index-len, index) === chgroup) {
+         index -= len;
+         count ++;
+      }
+      return count;
+   }
 }
 
 const regex_sufix = ['g', 'i', 'm', 's', 'u', 'y'];
@@ -94,8 +104,9 @@ function extract_regex(env, keywords) {
          pair_ch = pair_ch || '}';
          subenv.cursor = i;
          // no nest; e.g. /([A-Za-z0-9[\]]{2, 3})/
-         t = extract_string(subenv, ch, pair_ch, true);
+         t = extract_string(subenv, ch, pair_ch, '\\');
          i += t.token.length - 1;
+         pair_ch = null;
          break;
          case '(':
          pair_deep ++;

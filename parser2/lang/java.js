@@ -1,6 +1,6 @@
-const i_common = require('./common');
-const i_extractor = require('./extractor');
-const i_decorator = require('./decorator');
+const i_common = require('../common');
+const i_extractor = require('../extractor');
+const i_decorator = require('../decorator');
 
 const java_extract_feature = {
    '"': [extract_string],

@@ -9,6 +9,7 @@ function nouse() {
 
 b = 1; gi = 1
 console.log(test());
+a = a.replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,"@").replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/);
 a = 2 /*test*/ / /test/.test('a');
 a = 3 /*test*/ / parseInt(/.+/.exec('3f23fg')[0]);
 console.log(a);
