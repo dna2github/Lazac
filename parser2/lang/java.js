@@ -24,38 +24,104 @@ function extract_multiline_comment(env) {
    return i_extractor.extract_comment(env, '/*', '*/');
 }
 
+const java_combinations = [
+   '!=', '+=', '-=', '~=', '|=', '&=', '^=', '++', '>=',
+   '&&', '||', '>>', '<<', '%=', '*=', '/=', '--', '<=',
+   '->', '>>>', '%=', '<<=', '>>=', '>>>=', '...',
+   ['@', 'interface'],
+];
+
 const java_decorate_feature = {
    'package': [decorate_package],
    'import': [decorate_import],
    '@': [decorate_annotation]
 };
 
-function java_detect_name(tokens, index) {
-   let st, ed, t, token;
+function java_detect_basic_type(tokens, index) {
+   let st = index, ed = st, t = ed, n = tokens.length;
+   let token;
+   while (t < n && t > 0) {
+      t = i_common.search_next_skip_spacen(tokens, ed+1);
+      token = tokens[t];
+      if (!token) break;
+      if (token.token !== '.') break;
+      t = i_common.search_next_skip_spacen(tokens, t+1);
+      ed = t;
+   }
+   return {
+      startIndex: st, endIndex: ed+1
+   }
+}
+
+function java_detect_type_generic(tokens, index) {
+   let st = index, ed = st;
+   let token;
+   token = tokens[index];
+   if (token.token !== '<') return null;
+   let deep = 1;
    let n = tokens.length;
-   st = index;
-   t = i_common.search_prev_skip_spacen(tokens, st-1);
-   while (st >= 0) {
-      token = tokens[t];
-      if (token.token !== '.') {
-         break;
-      }
-      t = i_common.search_prev_skip_spacen(tokens, t-1);
-      st = t;
-      t = i_common.search_prev_skip_spacen(tokens, t-1);
+   for (ed = st+1; ed < n; ed++) {
+      token = tokens[ed];
+      if (token.token === '>') deep--;
+      else if (token.token === '<') deep ++;
+      if (!deep) break;
    }
-   if (st < 0) st = 0;
-   ed = index;
-   t = i_common.search_next_skip_spacen(tokens, ed+1);
-   while (ed < n) {
-      token = tokens[t];
-      if (token.token !== '.') {
-         break;
+   if (deep) return null;
+   return {
+      startIndex: st, endIndex: ed+1
+   };
+}
+
+function java_detect_type_array(tokens, index) {
+   let st = index, ed = st;
+   let token = tokens[index];
+   let dim_position = [st];
+   if (token.token !== '[') return null;
+   let deep = 1;
+   let n = tokens.length;
+   for (ed = st+1; ed < n; ed++) {
+      token = tokens[ed];
+      if (token.token === ']') deep--;
+      else if (token.token === '[') deep ++;
+      if (!deep) {
+         ed = i_common.search_next_skip_spacen(tokens, ed+1);
+         if (ed < 0) break;
+         token = tokens[ed];
+         if (token.token !== '[') break;
+         dim_position.push(ed);
+         deep ++;
       }
-      t = i_common.search_prev_skip_spacen(tokens, t-1);
-      st = t;
-      t = i_common.search_prev_skip_spacen(tokens, t-1);
    }
+   dim_position.push(ed+1);
+   if (deep) return null;
+   return {
+      startIndex: st, endIndex: ed+1,
+      dimension: dim_position
+   };
+}
+
+function java_detect_type(tokens, index) {
+   let start_token = tokens[index];
+   let position = java_detect_basic_type(tokens, index);
+   let t = position.endIndex;
+   t = i_common.search_next_skip_spacen(tokens, t);
+   let generic_position = java_detect_type_generic(tokens, t);
+   if (generic_position) {
+      position.generic = generic_position;
+      position.endIndex = generic_position.endIndex;
+   }
+   t = position.endIndex;
+   t = i_common.search_next_skip_spacen(tokens, t);
+   let array_position = java_detect_type_array(tokens, t);
+   if (array_position) {
+      position.array = array_position;
+      position.endIndex = array_position.endIndex;
+   }
+   start_token.startIndex = position.startIndex;
+   start_token.endIndex = position.endIndex;
+   if (position.generic) start_token.generic = position.generic;
+   if (position.array) start_token.array = position.array.dimension;
+   return position;
 }
 
 function decorate_package(env) {
@@ -85,12 +151,36 @@ function decorate_import(env) {
 }
 
 function decorate_annotation(env) {
-   return 0;
+   //@depend decorate_bracket
+   let st = env.cursor;
+   let ed = i_common.search_next_skip_spacen(env.tokens, st+1);
+   let anno_token = env.tokens[st];
+   let type_position = java_detect_type(env.tokens, ed);
+   if (type_position.endIndex - type_position.startIndex === 1) {
+      //@depend !merge_tokens
+      if (env.tokens[type_position.startIndex].token === 'interface') {
+         anno_token.java = '@interface';
+         return type_position.endIndex - st;
+      }
+   }
+   ed = type_position.endIndex;
+   ed = i_common.search_next_skip_spacen(env.tokens, ed);
+   let next_token = env.tokens[ed];
+   if (next_token && next_token.token === '(') {
+      anno_token.startIndex = st;
+      anno_token.endIndex = next_token.endIndex;
+   } else {
+      anno_token.startIndex = st;
+      anno_token.endIndex = type_position.endIndex;
+   }
+   ed = anno_token.endIndex;
+   return ed - st;
 }
 
 function parse(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, java_extract_feature);
+   i_extractor.merge_tokens(env, java_combinations);
    i_decorator.decorate_bracket(env);
    env.cursor = 0;
    i_decorator.decorate_scope(env, java_decorate_feature);

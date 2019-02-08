@@ -17,12 +17,11 @@ function decorate_bracket(env) {
       } else if (common_right_bracket.indexOf(ch) >= 0) {
          let pair = stack.pop();
          if (pair.ch !== ch) { /* bracket not match; should not be here */ }
-         env.tokens[pair.i].endIndex = i;
+         env.tokens[pair.i].endIndex = i+1;
       }
    }
    return 0;
 }
-
 
 function decorate_feature(env, features) {
    if (!features) return 0;

@@ -13,7 +13,9 @@ public static class X <T> {
    @Override @Test.Test(a=1) public void a4() {
       (x -> System.out.println(x))(1);
       ((x) -> System.out.println(x+1))(2);
-      a = x[0].b1();
+      a += x[0].b1();
+      a *= 1 << 2 || 3;
+      a >>>= a++ + 1;
    }
 
    public @interface a5 {}

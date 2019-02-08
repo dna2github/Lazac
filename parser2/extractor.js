@@ -178,6 +178,60 @@ function extract_tokens(env, feature_map) {
    return output;
 }
 
+const merge_terminal = '\0';
+function merge_tokens(env, combinations) {
+   let trie = build_trie(combinations);
+   let result = [];
+   let i = 0, n = env.tokens.length;
+   for(; i < n; i++) {
+      let x = env.tokens[i], o = env.tokens[i];
+      let group = [], cursor = trie;
+      while (cursor[x.token]) {
+         group.push({
+            token: x,
+            cursor: cursor[x.token],
+         });
+         cursor = cursor[x.token];
+         x = env.tokens[++i];
+         if (i >= n) break;
+      }
+      while (group.length && !cursor[merge_terminal]) {
+         -- i;
+         cursor = group.pop().cursor;
+      }
+      if (!group.length) {
+         group.push({
+            token: o
+         });
+      } else {
+         -- i;
+      }
+      x = group[0].token;
+      group.slice(1).forEach((y) => {
+         x.token += y.token.token;
+      });
+      result.push(x);
+   }
+   env.tokens = result;
+   return result;
+
+   function build_trie(set) {
+      let result = {};
+      set.forEach((group) => {
+         if (!Array.isArray(group)) {
+            group = group.split('');
+         }
+         let cursor = result;
+         group.forEach((part) => {
+            if (!cursor[part]) cursor[part] = {};
+            cursor = cursor[part];
+         });
+         cursor[merge_terminal] = group.join('');
+      });
+      return result;
+   }
+}
+
 //console.log(extract_comment({text: 'aa//"test\\"test" test', cursor: 2}, '//', '\n'));
 //console.log(extract_string({text: 'aa"test\\"test" test', cursor: 2}, '"', '"', '\\'));
 
@@ -188,5 +242,6 @@ module.exports = {
    extract_regex,
    extract_feature,
    extract_tokens_feature_generator,
-   extract_tokens
+   extract_tokens,
+   merge_tokens
 };
