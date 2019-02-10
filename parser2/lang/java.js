@@ -31,6 +31,12 @@ const java_combinations = [
    ['@', 'interface'],
 ];
 
+const tags = {
+   package: 'package.java',
+   import: 'import.java',
+   annotation: 'annotation.java',
+};
+
 const java_decorate_feature = {
    'package': [decorate_package],
    'import': [decorate_import],
@@ -129,6 +135,7 @@ function decorate_package(env) {
    let ed = i_common.search_next_stop(env.tokens, st, [';']);
    let package_name = i_common.subtokens(env.tokens, st+1, ed, i_common.is_not_space);
    let package_token = env.tokens[st];
+   package_token.tag = tags.package;
    package_token.startIndex = st;
    package_token.endIndex = ed;
    package_token.package = package_name;
@@ -140,6 +147,7 @@ function decorate_import(env) {
    let ed = i_common.search_next_stop(env.tokens, st+1, [';']);
    let package_name = i_common.subtokens(env.tokens, st+1, ed, i_common.is_not_space);
    let import_token = env.tokens[st];
+   import_token.tag = tags.import;
    import_token.startIndex = st;
    import_token.endIndex = ed;
    package_name = package_name.split('.');
@@ -166,6 +174,7 @@ function decorate_annotation(env) {
    ed = type_position.endIndex;
    ed = i_common.search_next_skip_spacen(env.tokens, ed);
    let next_token = env.tokens[ed];
+   anno_token.tag = tags.annotation;
    if (next_token && next_token.token === '(') {
       anno_token.startIndex = st;
       anno_token.endIndex = next_token.endIndex;

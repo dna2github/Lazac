@@ -1,5 +1,7 @@
 package test.test;
 
+import java.utils.List;
+
 @Deprecated
 public static class X <T> {
    public final class Test {}

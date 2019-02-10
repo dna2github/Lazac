@@ -47,19 +47,19 @@ function search_next(tokens, index, fn) {
 }
 
 function search_prev_skip_space(tokens, index) {
-   return search_prev(tokens, index, is_space);
+   return search_prev(tokens, index, (x) => is_space(x.token));
 }
 
 function search_next_skip_space(tokens, index) {
-   return search_next(tokens, index, is_space);
+   return search_next(tokens, index, (x) => is_space(x.token));
 }
 
 function search_prev_skip_spacen(tokens, index) {
-   return search_prev(tokens, index, is_spacen);
+   return search_prev(tokens, index, (x) => is_spacen(x.token));
 }
 
 function search_next_skip_spacen(tokens, index) {
-   return search_next(tokens, index, is_spacen);
+   return search_next(tokens, index, (x) => is_spacen(x.token));
 }
 
 function search_prev_stop(tokens, index, query_list) {
