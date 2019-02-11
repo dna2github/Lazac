@@ -1,9 +1,17 @@
 const TAG_COMMENT = 'comment';
 const TAG_STRING = 'string';
 const TAG_REGEX = 'regex';
+const TAG_VARIABLE = 'variable';
 const TAG_FUNCTION = 'function';
 const TAG_CLASS = 'class'; // class, interface, enum, struct
 const TAG_MODULE = 'module'; // namespace
+const TAG_KEYWORD = 'keyword';
+const TAG_BRACKET = {
+   '{': '{}', '}': '{}',
+   '(': '()', ')': '()',
+   '[': '[]', ']': '[]',
+   '<': '<>', '>': '<>',
+};
 
 const stops = [
    '~', '`', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
@@ -14,6 +22,12 @@ const stops = [
 // '' -> TAG_COMMENT
 const space = ['', ' ', '\t'];
 const spacen = ['', ' ', '\t', '\r', '\n'];
+const bracket = {
+   left: ['(', '{', '['],
+   right: [')', '}', ']'],
+   full_left: ['(', '{', '[', '<'],
+   full_right: [')', '}', ']', '>'],
+};
 
 function is_space(ch) {
    return space.indexOf(ch) >= 0;
@@ -141,15 +155,19 @@ function detect_pair(tokens, index) {
 }
 
 module.exports = {
-   TAG_CLASS,
    TAG_COMMENT,
-   TAG_FUNCTION,
-   TAG_MODULE,
-   TAG_REGEX,
    TAG_STRING,
+   TAG_REGEX,
+   TAG_VARIABLE,
+   TAG_FUNCTION,
+   TAG_CLASS,
+   TAG_MODULE,
+   TAG_KEYWORD,
+   TAG_BRACKET,
    stops,
    space,
    spacen,
+   bracket,
    is_space,
    is_spacen,
    is_not_space,
