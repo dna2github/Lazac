@@ -79,6 +79,7 @@ def test():
       # test for indent in next line
       x = lambda p: test()
       x = (lambda p: { 'a': p }, lambda p: { 'b': p }, lambda p: lambda q: {'factory': p })
+      x = {'test': lambda: 1}
       print 1
    if a:
       if a:

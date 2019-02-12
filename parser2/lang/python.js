@@ -65,6 +65,7 @@ const python_decorate_feature = {
    'import': [decorate_import],
    'class': [decorate_class],
    'def': [decorate_function],
+   'lambda': [decorate_lambda_function],
 };
 
 const debug = {
@@ -219,6 +220,37 @@ function decorate_function(env) {
    debug.function_text(env, start_token);
 
    return ed - st;
+}
+
+const lambda_end = [',', ';', '\n', ')', '}', ']'];
+function decorate_lambda_function(env) {
+   // lambda x, y: expression
+   let st = env.cursor, ed = i_common.search_next(
+      env.tokens, st+1, (x) => x.token !== ':'
+   );
+   if (ed < 0) return 1;
+   ed ++;
+   let lambda_token = env.tokens[st];
+   let scope_position = {
+      startIndex: ed,
+      endIndex: ed
+   }
+   // st - ed: lambda <parameters>
+   // TODO: extract parameters
+   let i = ed, n = env.tokens.length;
+   for (; i < n; i++) {
+      let token = env.tokens[i];
+      if (i_common.bracket.left.indexOf(token.token) >= 0 && token.endIndex) {
+         i = token.endIndex - 1;
+         continue;
+      }
+      if (lambda_end.indexOf(token.token) >= 0) break;
+   }
+   scope_position.endIndex = i;
+   lambda_token.scope = scope_position;
+   lambda_token.tag = i_common.TAG_FUNCTION;
+   lambda_token.startIndex = st;
+   lambda_token.endIndex = ed;
 }
 
 function decorate_indent(env) {
