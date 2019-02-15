@@ -68,40 +68,6 @@ const python_decorate_feature = {
    'lambda': [decorate_lambda_function],
 };
 
-const debug = {
-   group_text: (env, x) => {
-      if (!x) return '';
-      return env.tokens.slice(
-         x.startIndex, x.endIndex
-      ).map(
-         (x) => x.token
-      ).join('');
-   },
-   import_text: (env, token) => {
-      token.debug = {
-         base: debug.group_text(env, token.base),
-         import: token.import.map((x) => debug.group_text(env, x)),
-      };
-   },
-   class_text: (env, token) => {
-      token.debug = {
-         name: env.tokens[token.name].token,
-         inherit: token.inherit.map((x) => debug.group_text(env, x)),
-         annotation: token.annotation?token.annotation.map(
-            (x) => debug.group_text(env, env.tokens[x].name)
-         ):[],
-      }
-   },
-   function_text: (env, token) => {
-      token.debug = {
-         name: env.tokens[token.name].token,
-         annotation: token.annotation?token.annotation.map(
-            (x) => debug.group_text(env, env.tokens[x].name)
-         ):[],
-      }
-   }
-};
-
 function decorate_import(env) {
    // import os
    // from os import getenv
@@ -148,9 +114,6 @@ function decorate_import(env) {
       start_token.endIndex = ed;
       start_token.import = import_positions;
 
-      // debug:
-      debug.import_text(env, start_token);
-
       return ed - st;
    }
 }
@@ -167,7 +130,7 @@ function decorate_class(env) {
    ed = i_common.search_next_skip_space(env.tokens, ed+1);
    let token = env.tokens[ed];
    let inherit_positions = [];
-   let i = ed, position;
+   let i = ed;
    if (token.token === '(') {
       // inherit
       ed = token.endIndex;
@@ -189,14 +152,13 @@ function decorate_class(env) {
    // python_connect_annotation is processed in annotation part
    python_connect_scope(env.tokens, start_token, ed);
 
-   debug.class_text(env, start_token);
-
    return ed - st;
 }
 
 function decorate_function(env) {
    // def a()
    // def a(t1, *args, **kwargs)
+   // def a(t1, t2=None)
    let st = env.cursor, ed = i_common.search_next_skip_space(env.tokens, st+1);
    let start_token = env.tokens[st];
    // name_token = env.tokens[ed];
@@ -216,8 +178,6 @@ function decorate_function(env) {
    python_get_scope_indent(env.tokens, start_token, st)
    // python_connect_annotation is processed in annotation part
    python_connect_scope(env.tokens, start_token, ed);
-
-   debug.function_text(env, start_token);
 
    return ed - st;
 }

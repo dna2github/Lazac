@@ -2,7 +2,7 @@ const i_common = require('../common');
 const i_extractor = require('../extractor');
 const i_decorator = require('../decorator');
 
-const es5_extract_feature = {
+const cpp_extract_feature = {
    '"': [extract_string],
    '\'': [extract_char],
    '/': [extract_line_comment, extract_multiline_comment]
@@ -24,7 +24,7 @@ function extract_multiline_comment(env) {
    return i_extractor.extract_comment(env, '/*', '*/');
 }
 
-const javascript_combinations = [
+const cpp_combinations = [
    '++', '--', '+=', '-=', '*=', '/=', '%=', '==',
    '!=', '>=', '<=', '->', '&&', '||', '<<', '>>',
    '&=', '|=', '^=', '<<=', '>>=', ['#', 'include'],
@@ -36,8 +36,8 @@ const javascript_combinations = [
 
 function parse(env) {
    env.cursor = 0;
-   i_extractor.extract_tokens(env, es5_extract_feature);
-   i_extractor.merge_tokens(env, javascript_combinations);
+   i_extractor.extract_tokens(env, cpp_extract_feature);
+   i_extractor.merge_tokens(env, cpp_combinations);
    return env.tokens;
 }
 

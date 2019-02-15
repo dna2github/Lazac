@@ -2,7 +2,7 @@ const i_common = require('../common');
 const i_extractor = require('../extractor');
 const i_decorator = require('../decorator');
 
-const es5_extract_feature = {
+const go_feature = {
    '"': [extract_string],
    '\'': [extract_char],
    '`': [extract_raw_string],
@@ -29,17 +29,27 @@ function extract_multiline_comment(env) {
    return i_extractor.extract_comment(env, '/*', '*/');
 }
 
-const javascript_combinations = [
+const go_keywords = [
+   // ref:
+   // - https://golang.org/ref/spec#Keywords
+   'break', 'default', 'func', 'interface', 'select', 'var',
+   'case', 'defer', 'go', 'map', 'struct', 'chan', 'else',
+   'goto', 'package', 'switch', 'const', 'fallthrough', 'if',
+   'range', 'type', 'continue', 'for', 'import', 'return'
+];
+
+const go_combinations = [
    '++', '--', '+=', '-=', '*=', '/=', '%=', '==',
    '!=', '>=', '<=', '&&', '||', '<<', '>>', '&=',
-   '|=', '^=', '<<=', '>>='
+   '|=', '^=', '<<=', '>>=', '&^', '&^=', '<-', '...'
 ];
 
 function parse(env) {
    env.cursor = 0;
-   i_extractor.extract_tokens(env, es5_extract_feature);
-   i_extractor.merge_tokens(env, javascript_combinations);
+   i_extractor.extract_tokens(env, go_feature);
+   i_extractor.merge_tokens(env, go_combinations);
    i_decorator.decorate_bracket(env);
+   i_decorator.decorate_keywords(env, go_keywords);
    return env.tokens;
 }
 
