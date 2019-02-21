@@ -135,7 +135,6 @@ function decorate_function(env) {
    }
    let name = [st, st+1];
    token = env.tokens[st];
-console.log(5, token);
    token.startIndex = st;
    token.endIndex = ed;
    token.parameter = parameter;

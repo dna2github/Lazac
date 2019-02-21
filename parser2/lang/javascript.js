@@ -36,6 +36,11 @@ function extract_regex_generator() {
    );
 }
 
+const javascript_keywords = [
+   // ref:
+   // - https://golang.org/ref/spec#Keywords
+];
+
 const javascript_combinations = [
    '**', '++', '--', '+=', '-=', '*=', '/=', '%=', '==', '===',
    '!=', '!==', '>=', '<=', '=>', '&&', '||', '<<', '>>', '>>>',
@@ -85,6 +90,7 @@ function parse(env) {
    i_extractor.merge_tokens(env, javascript_combinations);
    merge_$(env);
    i_decorator.decorate_bracket(env);
+   i_decorator.decorate_keywords(env, javascript_keywords);
    return env.tokens;
 }
 

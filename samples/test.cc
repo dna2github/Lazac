@@ -14,13 +14,20 @@
 class C {};
 class A : public C {};
 namespace ns {
-   public:class A1 {};
+   class A1 {};
+}
+
+namespace X1 {
+   class X2 {
+      bool operator == (const X1::X2&);
+      int hwnd;
+   };
 }
 
 bool
-MVDIDlgMgr::DialogInfo::operator == (const DialogInfo& rhs)
+X1::X2::operator == (const X1::X2& rhs)
 {
-   return hwnd == rhs.hwnd;
+   return this.hwnd == rhs.hwnd;
 }
 
 int test(int x) {

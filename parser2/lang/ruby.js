@@ -25,6 +25,11 @@ function extract_line_comment(env) {
    return i_extractor.extract_comment(env, '#', '\n');
 }
 
+const ruby_keywords = [
+   // ref:
+   // - https://golang.org/ref/spec#Keywords
+];
+
 const ruby_combinations = [
    '++', '--', '+=', '-=', '*=', '/=', '%=', '==',
    '!=', '>=', '<=', '<<-', '&&', '||', '<<', '>>',
@@ -38,6 +43,7 @@ function parse(env) {
    i_extractor.extract_tokens(env, ruby_feature);
    i_extractor.merge_tokens(env, ruby_combinations);
    i_decorator.decorate_bracket(env);
+   i_decorator.decorate_keywords(env, ruby_keywords);
    return env.tokens;
 }
 

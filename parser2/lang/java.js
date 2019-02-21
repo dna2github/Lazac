@@ -24,6 +24,17 @@ function extract_multiline_comment(env) {
    return i_extractor.extract_comment(env, '/*', '*/');
 }
 
+const java_keywords = [
+   // ref:
+   // - https://docs.oracle.com/javase/tutorial/java/nutsandbolts/_keywords.html
+   'abstract', 'continue', 'for', 'new', 'switch', 'assert', 'default', 'goto', 'package', 'synchronized',
+   'boolean', 'do', 'if', 'private', 'this', 'break', 'double', 'implements', 'protected', 'throw',
+   'byte', 'else', 'import', 'public', 'throws', 'case', 'enum', 'instanceof', 'return', 'transient',
+   'catch', 'extends', 'int', 'short', 'try', 'char', 'final', 'interface', 'static', 'void',
+   'class', 'finally', 'long', 'strictfp', 'volatile', 'const', 'float', 'native', 'super', 'while',
+   '@interface',
+];
+
 const java_combinations = [
    '!=', '+=', '-=', '~=', '|=', '&=', '^=', '++', '>=',
    '&&', '||', '>>', '<<', '%=', '*=', '/=', '--', '<=',
@@ -191,6 +202,7 @@ function parse(env) {
    i_extractor.extract_tokens(env, java_extract_feature);
    i_extractor.merge_tokens(env, java_combinations);
    i_decorator.decorate_bracket(env);
+   i_decorator.decorate_keywords(env, java_keywords);
    env.cursor = 0;
    i_decorator.decorate_scope(env, java_decorate_feature);
    return env.tokens;
