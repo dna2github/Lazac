@@ -1,59 +1,40 @@
-#include <stdio.h>
-#include "stdlib.h"
+#include \
+   <stdio.h>
 
-#define XAA
-#define PI ( \
-   3.14159265358979323846264338\
-)
-#define hello(x, y) ((x)>(y)?#x:#y)
-#define BNAME(x) a(x)
-#define ANAME(x) BNAME(x)
-#line 13 "Xaaaa"
-#pragma warnings("hello world")
+#define A } \
+          test
+#define B this is a \
+         test
+#undef A
 
-class C {};
-class A : public C {};
-namespace ns {
-   public:class A1 {};
-}
+int main(int, const char**);
 
-bool
-MVDIDlgMgr::DialogInfo::operator == (const DialogInfo& rhs)
-{
-   return hwnd == rhs.hwnd;
-}
+struct __name1__ {
+   int test;
+   struct __name2__ {
+      int b;
+   } p;
+};
 
-int test(int x) {
+typedef int (TEST_t);
+
+typedef int (*name2_1)(int, int);
+
+typedef struct {
+   int b;
+} *name3;
+
+typedef struct {
+   int b;
+} name4[10];
+
+int a(int x) { return x; }
+
+int (*f1())(int) { return a; }
+int (*f2(struct {
+   int test;
+} x))(int) { return a; }
+
+int main(int argc, const char ** argv) {
    return 0;
 }
-
-int (*f ())(int) {
-   return test;
-}
-
-int ANAME(int x) {
-
-# ifdef PI
-   return 0;
-#endif
-}
-
-#ifdef XXXX
-#define PPP
-#endif
-
-int main () {
-   return 1;
-}
-#undef XAA
-int main () {
-   return 2;
-}
-
-/*
-   a() {  }            /---> } 
-          region: x1   |     region: x2
-      startIndex: a1   | startIndex: a2
-        endIndex: b1   |   endIndex: b2
-           chain: -----/
- */
