@@ -1,9 +1,11 @@
 package test.test;
 
+import java.util.List;
 import java.util.ArrayList;
 
 @Deprecated
 public class X <T> {
+   public enum EnumberateA { Sunday, Friday}
    public interface T1<T> {}
    public class T2 {
       T1 t = new T1<Test>() {};
@@ -20,7 +22,7 @@ public class X <T> {
       }
    }
 
-   public static interface F {
+   public static interface F<T> {
       void run(int x);
       default void f(int x) {
          System.out.println(x + 1);
@@ -50,4 +52,21 @@ public class X <T> {
    @interface a9{}
 
    public static void main(String[] args) {}
+
+   public static class K {
+
+      public static class Name<T extends List<String> > {}
+
+      public static interface TT{
+         public <T> List<T>[][] test();
+      }
+      public static class TT1<T>{
+         public static List<String>[][] test(List< List<? extends String> > p) {
+            F x = new F<String>() {
+               @Override public void run(int x) {}
+            };
+            return null;
+         }
+      }
+   }
 }

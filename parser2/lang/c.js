@@ -83,7 +83,7 @@ const c_decorate_feature = {
    '#define': [skip_precompile],
    '#undef': [skip_precompile],
    '#line': [skip_precompile],
-   '{': [decorate_struct, decorate_enum, decorate_union, decorate_function],
+   '{': [decorate_function, decorate_struct, decorate_enum, decorate_union],
    '}': [skip_block_bracket],
    ';': [decorate_function],
 };
