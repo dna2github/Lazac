@@ -273,7 +273,147 @@ const ruby_combinations = [
    '$\'', '$"', '$~', ['defined', '?'],
 ];
 
-const ruby_decorate_feature = {};
+const ruby_decorate_feature = {
+   'require': [decorate_require],
+   'require_relative': [decorate_require],
+   'class': [decorate_class_start],
+   'def': [decorate_function_start],
+   'module': [decorate_module_start],
+   'end': [decorate_inline_end, decorate_end],
+   'if': [decorate_inline_block, decorate_block],
+   'until': [decorate_inline_block, decorate_block],
+   'unless': [decorate_inline_block, decorate_block],
+   'while': [decorate_block],
+   'for': [decorate_block],
+   'case': [decorate_block],
+   'begin': [decorate_block], // begin ... rescue ... else ... ensure ... end
+   'do': [decorate_block],
+   '->': [decorate_lambda_function],
+   'lambda': [decorate_lambda_function],
+};
+
+function decorate_require(env) {}
+
+function decorate_lambda_function(env) {}
+
+const container_tag_map = {
+   'class': i_common.TAG_CLASS,
+   'def': i_common.TAG_FUNCTION,
+   'module': i_common.TAG_MODULE,
+};
+const end_of_class_name = ['\n', '<<', '<', ';'];
+function decorate_container(env, type) {
+   let st = i_common.search_prev_skip_space(env.tokens, env.cursor-1);
+   if (st < 0) return 0;
+   let token = env.tokens[st];
+   // skip [ '\\', '\n' ]
+   while (token.token === '\n') {
+      let prev_token = env.tokens[st-1];
+      if (prev_token && prev_token.token === '\\') {
+         st = i_common.search_prev_skip_space(env.tokens, st-2);
+         if (st < 0) break;
+         token = env.tokens[st];
+         continue;
+      }
+      break;
+   }
+   // e.g. puts a.class
+   //            ^
+   if (token.token === '.') return 0;
+   st = i_common.search_next_skip_space(env.tokens, env.cursor+1);
+   let name = [st], ed = st-1;
+   token = env.tokens[st];
+   do {
+      ed = i_common.search_next(
+         env.tokens, ed+1, (x) => end_of_class_name.indexOf(x.token) < 0
+      );
+      token = env.tokens[ed-1];
+      // skip [ '\\', '\n' ]
+   } while (token.token === '\\');
+   name.push(i_common.search_prev_skip_spacen(env.tokens, ed-1)+1);
+   if (name[0] >= name[1]) name = null;
+   token = env.tokens[env.cursor];
+   token.tag = container_tag_map[type];
+   token.startIndex = env.cursor;
+   if (name) token.name = name;
+   if (!env.block_stack) env.block_stack = [];
+   env.block_stack.push(token);
+   // TODO: inherit, e.g. class A? < B, C
+   return ed - env.cursor + 1;
+}
+
+function decorate_class_start(env) {
+   return decorate_container(env, 'class');
+}
+
+function decorate_function_start(env) {
+   let r = decorate_container(env, 'def');
+   let token = env.tokens[env.cursor];
+   let name = token.name;
+   token = env.tokens[name[1]-1];
+   if (name && token && token.token === ')') {
+      let parameter = [name[1]-1];
+      parameter.unshift(
+         i_common.search_prev(env.tokens, name[1]-1, (x) => x.endIndex !== name[1])
+      );
+      name[1] = i_common.search_prev_skip_spacen(env.tokens, parameter[0]-1) + 1;
+      token = env.tokens[env.cursor];
+      token.parameter = parameter;
+   }
+   return r;
+}
+
+function decorate_module_start(env) {
+   return decorate_container(env, 'module');
+}
+
+const end_not_inline = [' ', '\n', '\t', ';'];
+function decorate_inline_end(env) {
+   let token = env.tokens[env.cursor-1];
+   if (!token) return 1;
+   if (end_not_inline.indexOf(token.token) >= 0) return 0;
+   return 1;
+}
+
+function decorate_end(env) {
+   let block_token = env.block_stack.pop();
+   block_token.endIndex = env.cursor;
+   return 1;
+}
+
+const block_not_inline = [
+   '\n', '(', '{', '<', '>', '+', '-', '!', '&', '|', '^', '=',
+   '++', '--', '+=', '-=', '*=', '/=', '%=', '==',
+   '!=', '>=', '<=', '&&', '||', '<<', '>>',
+   '&=', '|=', '^=', '<<=', '>>=', '<=>', '&&=',
+   '->', '=>', '=~', '!~', '===', '**', '**=', '||=',
+];
+function decorate_inline_block(env) {
+   let st = i_common.search_prev_skip_space(env.tokens, env.cursor-1);
+   if (st < 0) return 0;
+   let token = env.tokens[st];
+   // skip [ '\\', '\n' ]
+   while (token.token === '\n') {
+      let prev_token = env.tokens[st-1];
+      if (prev_token && prev_token.token === '\\') {
+         st = i_common.search_prev_skip_space(env.tokens, st-2);
+         if (st < 0) break;
+         token = env.tokens[st];
+         continue;
+      }
+      break;
+   }
+   if (block_not_inline.indexOf(token.token) >= 0) return 0;
+   return 1;
+}
+
+function decorate_block(env) {
+   let token = env.tokens[env.cursor];
+   token.startIndex = env.cursor;
+   if (!env.block_stack) env.block_stack = [];
+   env.block_stack.push(token);
+   return 1;
+}
 
 function parse(env) {
    env.cursor = 0;
@@ -281,6 +421,7 @@ function parse(env) {
    i_extractor.merge_tokens(env, ruby_combinations);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, ruby_keywords);
+   env.cursor = 0;
    i_decorator.decorate_scope(env, ruby_decorate_feature);
    return env.tokens;
 }

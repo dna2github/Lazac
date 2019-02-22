@@ -1,6 +1,7 @@
 a = ""
 b = 1
-puts a.
+puts a.\
+\
 class
 
 puts a + if b == 1 then "x" else "y" end
@@ -16,7 +17,7 @@ end
 =begin again
 =end 1
 
-def b
+def b?
    puts "wojofiewf"
    y = 1
    z = if y == 1 then y+1 else y+2 end
@@ -24,6 +25,7 @@ def b
       if y == 1
 end
 
+# warning []] character class has ']' without escape
 a = /te[]]
 st/
    puts a
@@ -65,6 +67,29 @@ puts %{
 }
 
 puts DATA
+
+i = 1
+i++ if i > 0 then 0 else 1 end
+{} if i > 0
+
+if i == 0 then
+   puts 1
+else
+   puts 2 \
+end
+
+module Txq
+end
+a=[Txq]
+
+class A0
+   class << self
+   end
+end
+
+class a[0]::A < \
+   A0
+end
 
 __END__
 Hello World
