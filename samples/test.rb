@@ -14,7 +14,7 @@ def a(x)
 end
 
 =begin again
-=end
+=end 1
 
 def b
    puts "wojofiewf"
@@ -24,16 +24,22 @@ def b
       if y == 1
 end
 
-a = /te
+a = /te[]]
 st/
    puts a
-puts %-a-
+b=4
+i=3
+test=4
+puts b/test/i.to_f
+puts %-a\-)-
 puts %q["mane"]
 puts %Q["mane"]
 puts %["mane"]
-puts %q{"mane"}
-puts %q("(m(a(n)e)")?)
-# puts %i(#{ "interpolated" } int)/i
+puts %q{"ma[ne"}
+puts %q("(m\((a(n)e)")?)
+puts %q<man|e\>>
+puts %r"man#e[]][]"ix
+puts %i(#{"a"} int)
 puts %q-mane-
 puts %q\mane\
 
@@ -46,6 +52,10 @@ jeeepwofjeowpf
 ab  sdfwefwef
        EOS
 puts "b"
+
+puts <<"TEST"
+what a bug
+TEST
 
 a_b_c_d = 1
 puts b, a_b_c_d

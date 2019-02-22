@@ -38,7 +38,18 @@ function extract_regex_generator() {
 
 const javascript_keywords = [
    // ref:
-   // - https://golang.org/ref/spec#Keywords
+   // - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
+   'enum',
+   'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
+   'delete', 'do', 'else', 'export', 'extends', 'finally', 'for', 'function', 'if',
+   'import', 'in', 'instanceof', 'new', 'return', 'super', 'switch', 'this', 'throw',
+   'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
+   /* future reserved */
+   'implements', 'package', 'public', 'interface', 'private', 'static', 'let', 'protected',
+   'await', 'async',
+   'abstract', 'float', 'synchronized', 'boolean', 'goto', 'throws', 'byte', 'int',
+   'transient', 'char', 'long', 'volatile', 'double', 'native', 'final', 'short',
+   'null', 'true', 'false',
 ];
 
 const javascript_combinations = [
@@ -46,6 +57,8 @@ const javascript_combinations = [
    '!=', '!==', '>=', '<=', '=>', '&&', '||', '<<', '>>', '>>>',
    '&=', '|=', '^=', '<<=', '>>=', '>>>=', '...',
 ];
+
+const javascript_decorate_feature = {};
 
 function merge_$(env) {
    let result = [];
@@ -91,6 +104,7 @@ function parse(env) {
    merge_$(env);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, javascript_keywords);
+   i_decorator.decorate_scope(env, javascript_decorate_feature);
    return env.tokens;
 }
 
@@ -98,4 +112,4 @@ const i_fs = require('fs');
 let filename = process.argv[2];
 let text = i_fs.readFileSync(filename).toString();
 let tokens = parse({text: text});
-console.log(JSON.stringify(tokens, null, 3));
+console.log(JSON.stringify(tokens.map((x, i) => { x.id=i; return x; }), null, 3));

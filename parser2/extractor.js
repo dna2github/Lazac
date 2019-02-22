@@ -168,12 +168,15 @@ function extract_tokens(env, feature_map) {
       r = extract_feature(env, feature_map[env.text.charAt(env.cursor)]);
       if (!r) r = extract_others(env);
       if (!r) { /* not belong to any feature; should not be here */ }
-      output.push(r);
-      env.cursor += r.token.length;
-      if (r.tag === i_common.TAG_COMMENT) {
-         r.comment = r.token;
-         r.token = '';
-      }
+      if (!Array.isArray(r)) r = [r];
+      r.forEach((x) => {
+         output.push(x);
+         env.cursor += x.token.length;
+         if (x.tag === i_common.TAG_COMMENT) {
+            x.comment = x.token;
+            x.token = '';
+         }
+      });
    }
    return output;
 }

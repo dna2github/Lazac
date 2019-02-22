@@ -8,6 +8,12 @@ const common_left_right_bracket_map = {
 
 /* env = { tokens, cursor, ...} */
 
+function decorate_skip_current_line(env) {
+   let st = env.cursor;
+   let ed = i_common.search_next(env.tokens, st+1, (x) => x.token !== '\n');
+   return ed - st + 1;
+}
+
 function decorate_bracket(env) {
    let stack = [];
    let i, n, ch, token;
@@ -59,6 +65,7 @@ function decorate_scope(env, feature_map, feature_default_fn) {
 }
 
 module.exports = {
+   decorate_skip_current_line,
    decorate_bracket,
    decorate_keywords,
    decorate_scope

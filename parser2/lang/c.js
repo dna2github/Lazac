@@ -239,6 +239,7 @@ function parse(env) {
    i_extractor.merge_tokens(env, c_combinations);
    env.cursor = 0;
    i_decorator.decorate_scope(env, c_decorate_precompile_feature);
+   // TODO: simulate preprocess
    i_decorator.decorate_keywords(env, c_keywords);
    env.cursor = 0;
    i_decorator.decorate_scope(env, c_decorate_feature);

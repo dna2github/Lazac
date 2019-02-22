@@ -62,13 +62,17 @@ const cpp_combinations = [
    ['#', 'undef'], ['#', 'line'],
 ];
 
+const cpp_decorate_feature = {};
+
 function parse(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, cpp_extract_feature);
    i_extractor.merge_tokens(env, cpp_combinations);
    // TODO: skip #define A {  #defin B }... to avoid bracket not pairing
+   // TODO: simulate preprocess
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, cpp_keywords);
+   i_decorator.decorate_scope(env, cpp_decorate_feature);
    return env.tokens;
 }
 
@@ -76,4 +80,4 @@ const i_fs = require('fs');
 let filename = process.argv[2];
 let text = i_fs.readFileSync(filename).toString();
 let tokens = parse({text: text});
-console.log(JSON.stringify(tokens, null, 3));
+console.log(JSON.stringify(tokens.map((x, i) => { x.id=i; return x; }), null, 3));

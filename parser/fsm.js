@@ -278,7 +278,7 @@ class FeatureCommonString extends Feature {
             while (p >= 0 && env.output[p].tag === utils.TAG_COMMENT) {
                p = utils.search_prev(env.output, p-1, utils.SEARCH_SKIPSPACE);
             }
-            // symbol/test/.test('test'), the first "/" will be parsed as division op
+            // symbol/test/i.test('test'), the first "/" will be parsed as division op
             if (p === -1) return true;
             p = env.output[p];
             if (utils.contains(utils.common_stops, p.token)) return true;

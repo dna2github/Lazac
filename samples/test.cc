@@ -19,6 +19,7 @@ namespace ns {
 
 namespace X1 {
    class X2 {
+      public:
       bool operator == (const X1::X2&);
       int hwnd;
    };
@@ -27,7 +28,7 @@ namespace X1 {
 bool
 X1::X2::operator == (const X1::X2& rhs)
 {
-   return this.hwnd == rhs.hwnd;
+   return this->hwnd == rhs.hwnd;
 }
 
 int test(int x) {
