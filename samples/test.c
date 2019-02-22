@@ -7,6 +7,8 @@
          test
 #undef A
 
+#define C teststruct struct
+
 int main(int, const char**);
 
 struct __name1__ {
@@ -27,6 +29,9 @@ typedef struct {
 typedef struct {
    int b;
 } name4[10];
+
+static struct tx1 { int a; int b; }** t1() { return 0; }
+extern struct __name1__******* t2() { return 0; }
 
 int a(int x) { return x; }
 

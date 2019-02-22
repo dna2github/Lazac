@@ -83,7 +83,7 @@ const c_decorate_feature = {
    '#define': [skip_precompile],
    '#undef': [skip_precompile],
    '#line': [skip_precompile],
-   '{': [decorate_function, decorate_struct, decorate_enum, decorate_union],
+   '{': [decorate_struct, decorate_enum, decorate_union, decorate_function],
    '}': [skip_block_bracket],
    ';': [decorate_function],
 };
@@ -95,6 +95,7 @@ function skip_block_bracket(env) {
    return 1;
 }
 
+const return_type_prefix = ['struct', 'enum', 'union'];
 function decorate_function(env) {
    env.indefine_able = (env.indefine_able || 0) + 1;
    let st = env.cursor;
@@ -121,8 +122,11 @@ function decorate_function(env) {
       // if/for/while/switch (...) {...}
       return 0;
    }
+   let return_type = st;
    if (token.token === ')') {
+      // return function pointer
       parameter = [];
+      return_type = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex !== st);
       st = i_common.search_prev_skip_spacen(env.tokens, st-1);
       token = env.tokens[st];
       if (!token) return 0;
@@ -134,7 +138,35 @@ function decorate_function(env) {
       token = env.tokens[st];
    }
    let name = [st, st+1];
-   token = env.tokens[st];
+   // search for heading type, e.g. int, struct name {int a;}**
+   while (true) {
+      return_type = i_common.search_prev_skip_spacen(env.tokens, return_type-1);
+      token = env.tokens[return_type];
+      if (!token) break;
+      if (token.token === '*') continue;
+      if (token.token === '}') {
+         return_type = i_common.search_prev(
+            env.tokens, return_type-1, (x) => x.endIndex !== return_type+1
+         );
+         return_type = i_common.search_prev_skip_spacen(env.tokens, return_type-1);
+         token = env.tokens[return_type];
+         if (!token) break;
+      }
+      // name
+      if (return_type_prefix.indexOf(token.token) < 0) {
+         st = return_type;
+         return_type = i_common.search_prev_skip_spacen(env.tokens, return_type-1);
+         token = env.tokens[return_type];
+         if (token && token.endIndex && return_type_prefix.indexOf(token.token) >= 0) {
+            st = return_type;
+         }
+      } else {
+         st = return_type;
+      }
+      // TODO: search for function attribute, e.g. extern, static
+      break;
+   }
+   token = env.tokens[name[0]];
    token.startIndex = st;
    token.endIndex = ed;
    token.parameter = parameter;
