@@ -36,30 +36,6 @@ function extract_regex_generator() {
    );
 }
 
-const javascript_keywords = [
-   // ref:
-   // - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
-   'enum',
-   'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
-   'delete', 'do', 'else', 'export', 'extends', 'finally', 'for', 'function', 'if',
-   'import', 'in', 'instanceof', 'new', 'return', 'super', 'switch', 'this', 'throw',
-   'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
-   /* future reserved */
-   'implements', 'package', 'public', 'interface', 'private', 'static', 'let', 'protected',
-   'await', 'async',
-   'abstract', 'float', 'synchronized', 'boolean', 'goto', 'throws', 'byte', 'int',
-   'transient', 'char', 'long', 'volatile', 'double', 'native', 'final', 'short',
-   'null', 'true', 'false',
-];
-
-const javascript_combinations = [
-   '**', '++', '--', '+=', '-=', '*=', '/=', '%=', '==', '===',
-   '!=', '!==', '>=', '<=', '=>', '&&', '||', '<<', '>>', '>>>',
-   '&=', '|=', '^=', '<<=', '>>=', '>>>=', '...',
-];
-
-const javascript_decorate_feature = {};
-
 function merge_$(env) {
    let result = [];
    let i = 0, n = env.tokens.length;
@@ -97,6 +73,37 @@ function merge_$(env) {
    return result;
 }
 
+const javascript_keywords = [
+   // ref:
+   // - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Lexical_grammar
+   'enum',
+   'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
+   'delete', 'do', 'else', 'export', 'extends', 'finally', 'for', 'function', 'if',
+   'import', 'in', 'instanceof', 'new', 'return', 'super', 'switch', 'this', 'throw',
+   'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
+   /* future reserved */
+   'implements', 'package', 'public', 'interface', 'private', 'static', 'let', 'protected',
+   'await', 'async',
+   'abstract', 'float', 'synchronized', 'boolean', 'goto', 'throws', 'byte', 'int',
+   'transient', 'char', 'long', 'volatile', 'double', 'native', 'final', 'short',
+   'null', 'true', 'false',
+];
+
+const javascript_combinations = [
+   '**', '++', '--', '+=', '-=', '*=', '/=', '%=', '==', '===',
+   '!=', '!==', '>=', '<=', '=>', '&&', '||', '<<', '>>', '>>>',
+   '&=', '|=', '^=', '<<=', '>>=', '>>>=', '...',
+];
+
+const javascript_decorate_feature = {
+   'function': [decorate_function],
+   '=>': [decorate_lambda_function],
+};
+
+function decorate_function(env) {}
+
+function decorate_lambda_function(env) {}
+
 function parse(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, es5_extract_feature);
@@ -104,6 +111,7 @@ function parse(env) {
    merge_$(env);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, javascript_keywords);
+   env.cursor = 0;
    i_decorator.decorate_scope(env, javascript_decorate_feature);
    return env.tokens;
 }

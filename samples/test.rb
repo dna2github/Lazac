@@ -91,5 +91,7 @@ class a[0]::A < \
    A0
 end
 
+puts `ls`
+
 __END__
 Hello World

@@ -59,13 +59,29 @@ const csharp_combinations = [
    ['#', 'undef'], ['#', 'warning'], ['#', 'line'],
 ];
 
-const csharp_decorate_feature = {};
+const csharp_decorate_feature = {
+   'using': [decorate_import],
+   // 'DllImport': [decorate_dll_import], // e.g. [DllImport("User32.dll")]
+   'namespace': [decorate_module],
+   'class': [decorate_class],
+   '{': [decorate_function],
+};
+
+function decorate_import(env) {}
+
+function decorate_module(env) {}
+
+function decorate_class(env) {}
+
+function decorate_function(env) {}
 
 function parse(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, csharp_extract_feature);
    i_extractor.merge_tokens(env, csharp_combinations);
    i_decorator.decorate_bracket(env);
+   i_decorator.decorate_keywords(env, csharp_keywords);
+   env.cursor = 0;
    i_decorator.decorate_scope(env, csharp_decorate_feature);
    return env.tokens;
 }

@@ -40,6 +40,12 @@ int (*f2(struct {
    int test;
 } x))(int) { return a; }
 
+struct x1a {
+   int a;
+} m0 () {}
+
+m1 () {} m2 () {}
+
 int main(int argc, const char ** argv) {
    return 0;
 }

@@ -11,13 +11,19 @@
 #line 13 "Xaaaa"
 #pragma warnings("hello world")
 
+using namespace XX1;
+
+class A;
+
 class C {};
 class A : public C {};
 namespace ns {
    class A1 {};
 }
 
-namespace X1 {
+namespace XX1 {}
+
+namespace ::X1 {
    class X2 {
       public:
       bool operator == (const X1::X2&);
@@ -26,9 +32,13 @@ namespace X1 {
 }
 
 bool
-X1::X2::operator == (const X1::X2& rhs)
+::X1 :: X2::operator == (const X1::X2& rhs)
 {
    return this->hwnd == rhs.hwnd;
+}
+
+class XX1::X1::X2* f0() {
+   return 0;
 }
 
 int test(int x) {
@@ -54,7 +64,7 @@ int main () {
    return 1;
 }
 #undef XAA
-int main () {
+int mainx () {
    return 2;
 }
 

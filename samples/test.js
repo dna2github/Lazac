@@ -21,6 +21,16 @@ b = 6
 console.log(a(),b);
 (b)
 
+function testx() {
+   p0();
+   setTimeout(() => p0(), 0);
+   setTimeout(() => {
+      console.log('timeout from testx', p0());
+   }, 100);
+
+   function p0() {}
+}
+
 if (a === 1) {
    b = 2
 } else if (a === 2) b = 3

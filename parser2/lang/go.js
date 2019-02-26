@@ -44,7 +44,20 @@ const go_combinations = [
    '|=', '^=', '<<=', '>>=', '&^', '&^=', '<-', '...'
 ];
 
-const go_decorate_feature = {};
+const go_decorate_feature = {
+   'import': [decoraete_import],
+   'type': [decorate_type],
+   'struct': [decorate_struct],
+   'func': [decorate_function],
+};
+
+function decoraete_import(env) {}
+
+function decorate_type(env) {}
+
+function decorate_struct(env) {}
+
+function decorate_function(env) {}
 
 function parse(env) {
    env.cursor = 0;

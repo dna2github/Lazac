@@ -68,6 +68,7 @@ const c_decorate_precompile_feature = {
    '}': [decorate_bracket],
    ']': [decorate_bracket],
    ')': [decorate_bracket],
+   '\\\n': [decorate_combline],
 };
 
 const c_decorate_feature = {
@@ -92,6 +93,13 @@ function skip_block_bracket(env) {
    if (env.indefine_able) {
       env.indefine_able --;
    }
+   return 1;
+}
+
+function decorate_combline(env) {
+   let token = env.tokens[env.cursor];
+   token._token = token.token;
+   token.token = '';
    return 1;
 }
 
@@ -151,6 +159,11 @@ function decorate_function(env) {
          return_type = i_common.search_prev_skip_spacen(env.tokens, return_type-1);
          token = env.tokens[return_type];
          if (!token) break;
+      }
+      //      m0() {}      m1() {}
+      // void m0() {} void m1() {}
+      if (token.token === ')') {
+         break;
       }
       // name
       if (return_type_prefix.indexOf(token.token) < 0) {
