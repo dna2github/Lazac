@@ -11,7 +11,16 @@
 #line 13 "Xaaaa"
 #pragma warnings("hello world")
 
-using namespace XX1;
+namespace X1 {
+   class X2 {
+      public:
+      X2();
+      bool operator == (const X1::X2&);
+      int hwnd;
+   };
+}
+
+using namespace X1;
 
 class A;
 
@@ -23,13 +32,7 @@ namespace ns {
 
 namespace XX1 {}
 
-namespace ::X1 {
-   class X2 {
-      public:
-      bool operator == (const X1::X2&);
-      int hwnd;
-   };
-}
+::X1::X2::X2() : hwnd(0) {}
 
 bool
 ::X1 :: X2::operator == (const X1::X2& rhs)
@@ -37,7 +40,7 @@ bool
    return this->hwnd == rhs.hwnd;
 }
 
-class XX1::X1::X2* f0() {
+class ::X2* f0() {
    return 0;
 }
 

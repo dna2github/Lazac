@@ -102,6 +102,7 @@ const cpp_decorate_feature = {
    'class': [decorate_class],
    'struct': [decorate_struct],
    'template': [decorate_generic],
+   ':': [decorate_function_with_init],
    '{': [decorate_function, decorate_lambda_function, decorate_enum, decorate_union],
    '}': [skip_block_bracket],
    ';': [decorate_function],
@@ -127,6 +128,62 @@ function decorate_generic(env) {
 
 function decorate_lambda_function(env) {
    // https://docs.microsoft.com/en-us/cpp/cpp/lambda-expressions-in-cpp?view=vs-2017
+}
+
+function decorate_function_with_init(env) {
+   // https://en.cppreference.com/w/cpp/language/initializer_list
+   // not: class A { int a = 4?(4):1+{3}; }
+   // class A { int a; A() : a(3) {} }
+   if (!env.indefine_able) env.indefine_able = [];
+   let container = env.indefine_able[env.indefine_able.length-1];
+   if (container === '{') {
+      // cannot define function in non-container block
+      return 0;
+   }
+   let st = env.cursor, ed = st;
+   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
+   let token = env.tokens[st];
+   if (!token) return 0;
+   if (token.token !== ')') return 0;
+   let init = [];
+   while(true) {
+      let one_init = [ed, ed];
+      one_init[0] = i_common.search_next_skip_spacen(env.tokens, one_init[0]+1);
+      one_init[1] = i_common.search_next_skip_spacen(env.tokens, one_init[0]+1);
+      token = env.tokens[one_init[0]];
+      if (!token) return 0;
+      if (token.token === '{') return 0;
+      token = env.tokens[one_init[1]];
+      if (!token) return 0;
+      if (token.token !== '{' && token.token !== '(') return 0;
+      ed = token.endIndex;
+      one_init[1] = ed;
+      ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
+      token = env.tokens[ed];
+      if (!token) return 0;
+      if (token.token === '{') {
+         init.push(one_init);
+         break;
+      }
+      if (token.token !== ',') return 0;
+      init.push(one_init);
+   }
+   let skip_n = ed;
+   ed = token.endIndex;
+   let parameter = [st, st+1];
+   st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex !== st+1);
+   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
+   let name_position = detect_prev_basic_name(env.tokens, st);
+   let name = [name_position.startIndex, name_position.endIndex];
+   token = env.tokens[name[0]];
+   token.tag = i_common.TAG_FUNCTION;
+   token.parameter = parameter;
+   token.init = init;
+   token.name = name;
+   token.startIndex = name[0];
+   token.endIndex = ed;
+   env.indefine_able.push('{');
+   return skip_n - env.cursor + 1;
 }
 
 function decorate_import(env) {
@@ -300,6 +357,11 @@ function detect_prev_basic_name(tokens, index) {
       token = tokens[index];
       if (!token) break;
       if (token.tag === i_common.TAG_KEYWORD) break;
+      if (token.token === '~') {
+         // deconstructor case: class A { ~A() {} }; ~NS::A() {}
+         position.startIndex = index;
+         break;
+      }
       ch = token.token.charAt(0);
       if (i_common.stops.indexOf(ch) >= 0) break;
    } while (true);
@@ -419,7 +481,7 @@ function decorate_function(env) {
          //st = return_type;
          return_type = i_common.search_prev_skip_spacen(env.tokens, return_type-1);
          token = env.tokens[return_type];
-         if (token && token.endIndex && return_type_prefix.indexOf(token.token) >= 0) {
+         if (token && return_type_prefix.indexOf(token.token) >= 0) {
             st = return_type;
          }
       } else {
