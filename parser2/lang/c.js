@@ -104,6 +104,7 @@ function decorate_combline(env) {
 }
 
 const return_type_prefix = ['struct', 'enum', 'union'];
+const keyword_block = ['if', 'for', 'while', 'switch'];
 function decorate_function(env) {
    env.indefine_able = (env.indefine_able || 0) + 1;
    let st = env.cursor;
@@ -126,7 +127,7 @@ function decorate_function(env) {
    st = i_common.search_prev_skip_spacen(env.tokens, st-1);
    token = env.tokens[st];
    if (!token) return 0;
-   if (['if', 'for', 'while', 'switch'].indexOf(token.token) >= 0) {
+   if (keyword_block.indexOf(token.token) >= 0) {
       // if/for/while/switch (...) {...}
       return 0;
    }

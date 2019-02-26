@@ -307,6 +307,7 @@ function detect_prev_basic_name(tokens, index) {
 }
 
 const return_type_prefix = ['class', 'struct', 'enum', 'union'];
+const keyword_block = ['if', 'for', 'while', 'switch', 'try', 'catch'];
 function decorate_function(env) {
    if (!env.indefine_able) env.indefine_able = [];
    let st = env.cursor;
@@ -342,7 +343,7 @@ function decorate_function(env) {
    st = i_common.search_prev_skip_spacen(env.tokens, st-1);
    token = env.tokens[st];
    if (!token) return 0;
-   if (['if', 'for', 'while', 'switch'].indexOf(token.token) >= 0) {
+   if (keyword_block.indexOf(token.token) >= 0) {
       // if/for/while/switch (...) {...}
       return 0;
    }

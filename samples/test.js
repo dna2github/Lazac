@@ -7,6 +7,32 @@ function nouse() {
    return /[/]/.test('//');
 }
 
+p = () => (
+   0
+) +
+(1)
+
+p1 = () => (
+   0
+) +
+
+(2);
+function p0() {}
+console.log(p(), p1());
+
+dd = [class {}]
+class A09 {}
+class A10 {}
+class A11 extends dd[0] {
+   constructor(a, ...b) {}
+}
+p = {}
+p.class = 1;
+class A00 extends {test: class B00{} }['test'] {}
+
+xxx = class extends A11 {}
+
+a = '';
 b = 1; gi = 1
 console.log(test());
 a = a.replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,"@").replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/);

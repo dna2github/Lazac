@@ -57,7 +57,14 @@ function decorate_scope(env, feature_map, feature_default_fn) {
    let n, r;
    n = env.tokens.length;
    while (env.cursor < n) {
-      r = decorate_feature(env, feature_map[env.tokens[env.cursor].token]);
+      let name = env.tokens[env.cursor].token;
+      let features = feature_map[name];
+      if (Array.isArray(features)) {
+         // dict['constructor'] may cause error
+         r = decorate_feature(env, features);
+      } else {
+         r = 0;
+      }
       if (!r) r = decorate_others && decorate_others(env) || 1;
       env.cursor += r;
    }
