@@ -103,12 +103,22 @@ const cpp_decorate_feature = {
    'struct': [decorate_struct],
    'template': [decorate_generic],
    ':': [decorate_function_with_init],
-   '{': [decorate_function, decorate_lambda_function, decorate_enum, decorate_union],
-   '}': [skip_block_bracket],
+   '{': [
+      decorate_function, decorate_lambda_function, decorate_enum,
+      decorate_union, enter_block_bracket
+   ],
+   '}': [leave_block_bracket],
    ';': [decorate_function],
 };
 
-function skip_block_bracket(env) {
+function enter_block_bracket(env) {
+   if (env.indefine_able) {
+      env.indefine_able.push('{');
+   }
+   return 1;
+}
+
+function leave_block_bracket(env) {
    if (env.indefine_able) {
       env.indefine_able.pop();
    }
@@ -282,7 +292,9 @@ function decorate_struct(env) {
    class_token.startIndex = st;
    class_token.endIndex = token.endIndex || ed;
    if (!env.indefine_able) env.indefine_able = [];
-   env.indefine_able.push('struct');
+   if (token.token !== ';') {
+      env.indefine_able.push('struct');
+   }
    return ed - st + 1;
 }
 
@@ -328,7 +340,9 @@ function decorate_class(env) {
    class_token.startIndex = st;
    class_token.endIndex = token.endIndex || ed;
    if (!env.indefine_able) env.indefine_able = [];
-   env.indefine_able.push('class');
+   if (token.token !== ';') {
+      env.indefine_able.push('struct');
+   }
    return ed - st + 1;
 }
 
@@ -496,7 +510,11 @@ function decorate_function(env) {
    token.parameter = parameter;
    token.name = name;
    token.tag = i_common.TAG_FUNCTION;
-   env.indefine_able.push('{');
+   token = env.tokens[ed];
+   if (!token || token.token !== ';') {
+      env.indefine_able.push('{');
+   }
+   return 1;
 }
 
 function decorate_type(env, type) {

@@ -37,6 +37,9 @@ namespace XX1 {}
 bool
 ::X1 :: X2::operator == (const X1::X2& rhs)
 {
+   if (true) {
+      this->hwnd = 0;
+   }
    return this->hwnd == rhs.hwnd;
 }
 
@@ -78,3 +81,15 @@ int mainx () {
         endIndex: b1   |   endIndex: b2
            chain: -----/
  */
+
+#include <algorithm>
+#include <cmath>
+
+void abssort(float* x, unsigned n) {
+    std::sort(x, x + n,
+        // Lambda expression begins
+        [](float a, float b) {
+            return (std::abs(a) < std::abs(b));
+        } // end of lambda expression
+    );
+}
