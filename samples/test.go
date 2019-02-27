@@ -1,6 +1,13 @@
 package main
 
-import "fmt"
+// import "fmt"
+
+import (
+   fmt "fmt"
+   _ "fmt"; . "fmt"
+)
+
+import "math";
 
 type B struct{}
 type C struct{}
@@ -13,6 +20,7 @@ type (F []int; G [][][]* interface{})
 
 func (b *B) a() {
    fmt.Println("xxxxxx")
+   Println("woo!", math.Abs(-1))
 }
 
 func (b *B) b() func(int) int {

@@ -14,7 +14,9 @@ namespace Test {
       }
    }
 
-   public class A1 {
+   public class A0<T> where T : string {}
+
+   public class A1 : A0<string> {
       [Condition("DEBUG")]
       public int test() { return 0; }
 

@@ -84,12 +84,21 @@ const c_decorate_feature = {
    '#define': [skip_precompile],
    '#undef': [skip_precompile],
    '#line': [skip_precompile],
-   '{': [decorate_function, decorate_struct, decorate_enum, decorate_union],
-   '}': [skip_block_bracket],
+   '{': [
+      decorate_function, decorate_struct, decorate_enum,
+      decorate_union, enter_block_bracket,
+   ],
+   '}': [leave_block_bracket],
    ';': [decorate_function],
 };
 
-function skip_block_bracket(env) {
+function enter_block_bracket(env) {
+   if (!env.indefine_able) env.indefine_able = 0;
+   env.indefine_able ++;
+   return 1;
+}
+
+function leave_block_bracket(env) {
    if (env.indefine_able) {
       env.indefine_able --;
    }
@@ -186,6 +195,9 @@ function decorate_function(env) {
    token.parameter = parameter;
    token.name = name;
    token.tag = i_common.TAG_FUNCTION;
+   token = env.tokens[env.cursor];
+   if (token.token === ';') env.indefine_able --;
+   return 1;
 }
 
 function decorate_type(env, type) {

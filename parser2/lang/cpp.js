@@ -341,7 +341,7 @@ function decorate_class(env) {
    class_token.endIndex = token.endIndex || ed;
    if (!env.indefine_able) env.indefine_able = [];
    if (token.token !== ';') {
-      env.indefine_able.push('struct');
+      env.indefine_able.push('class');
    }
    return ed - st + 1;
 }
