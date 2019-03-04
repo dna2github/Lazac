@@ -120,7 +120,7 @@ function decorate_function(env) {
    // int main() {}
    // int main() ;
    let ed = token.endIndex || env.cursor;
-   if (ed === env.cursor && env.indefine_able > 1) {
+   if (env.indefine_able >= 1) {
       return 0;
    }
    let parameter = [];
