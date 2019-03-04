@@ -280,8 +280,6 @@ function parse(env) {
    return env.tokens;
 }
 
-const i_fs = require('fs');
-let filename = process.argv[2];
-let text = i_fs.readFileSync(filename).toString();
-let tokens = parse({text: text});
-console.log(JSON.stringify(tokens.map((x, i) => { x.id=i; return x; }), null, 3));
+module.exports = {
+   parse: (text) => parse({ text })
+};
