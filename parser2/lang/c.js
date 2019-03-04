@@ -115,7 +115,6 @@ function decorate_combline(env) {
 const return_type_prefix = ['struct', 'enum', 'union'];
 const keyword_block = ['if', 'for', 'while', 'switch'];
 function decorate_function(env) {
-   env.indefine_able = (env.indefine_able || 0) + 1;
    let st = env.cursor;
    let token = env.tokens[st];
    // int main() {}
@@ -189,6 +188,7 @@ function decorate_function(env) {
       // TODO: search for function attribute, e.g. extern, static
       break;
    }
+   env.indefine_able = (env.indefine_able || 0) + 1;
    token = env.tokens[name[0]];
    token.startIndex = st;
    token.endIndex = ed;
