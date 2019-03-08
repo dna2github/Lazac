@@ -42,7 +42,9 @@ const c_keywords = [
 const c_combinations = [
    '++', '--', '+=', '-=', '*=', '/=', '%=', '==',
    '!=', '>=', '<=', '->', '&&', '||', '<<', '>>',
-   '&=', '|=', '^=', '<<=', '>>=', ['#', 'include'],
+   '&=', '|=', '^=', '<<=', '>>=',
+   // XXX: currently do not support "#     ifdef TEST ..."
+   ['#', 'include'],
    ['#', 'if'], ['#', 'ifdef'], ['#', 'ifndef'],
    ['#', 'else'], ['#', 'elif'], ['#', 'endif'],
    ['#', 'pragma'], ['#', 'error'], ['#', 'define'],
@@ -267,9 +269,10 @@ function decorate_bracket_region(env) {
    let token = env.tokens[env.cursor];
    if (!env.bracket_stack) env.bracket_stack = [];
    if (!env.bracket_stack_snapshot) env.bracket_stack_snapshot = [];
+   let snapshot;
    switch (token.token) {
       case '#if': case '#ifdef': case '#ifndef':
-         let snapshot = env.bracket_stack.slice();
+         snapshot = env.bracket_stack.slice();
          env.bracket_stack_snapshot.push(snapshot);
          // to gurantee #elif and #else region not overwrite origin token endIndex
          let origin = snapshot.pop();
@@ -277,6 +280,7 @@ function decorate_bracket_region(env) {
          origin && snapshot.push(fake);
          break;
       case '#elif': case '#else':
+         // XXX: cannot match like "#   if", "#   ifdef", "# ifndef"
          env.bracket_stack = env.bracket_stack_snapshot[env.bracket_stack_snapshot.length-1].slice();
          break;
       case '#endif':
@@ -288,14 +292,22 @@ function decorate_bracket_region(env) {
 
 function decorate_precompile(env) {
    let st = env.cursor;
-   let ed = i_common.search_next(
-      env.tokens, st + 1, (x) => x.token !== '\n' && x.tag !== i_common.TAG_COMMENT
-   );
-   while (env.tokens[ed - 1].token === '\\') {
+   let ed = st;
+   let token;
+   do {
       ed = i_common.search_next(
-         env.tokens, ed + 1, (x) => x.token !== '\n'
+         env.tokens, ed+1,
+         (x) => x.token !== '\n' && x.tag !== i_common.TAG_COMMENT
       );
-   }
+      token = env.tokens[ed];
+      if (!token) break;
+      if (token.comment) {
+         if (token.comment.charAt(token.comment.length - 1) === '\n') break;
+      } else {
+         token = env.tokens[ed-1];
+         if (!token || token.token !== '\\') break;
+      }
+   } while (true);
    let start_token = env.tokens[st];
    start_token.startIndex = st;
    start_token.endIndex = ed;
