@@ -148,9 +148,15 @@ function decorate_struct(env) {}
 
 function decorate_function(env) {}
 
-function parse(env) {
-   env.cursor = 0;
+function tokenize(env) {
+   env.curosr = 0;
    i_extractor.extract_tokens(env, go_feature);
+   return env.tokens;
+}
+
+function parse(env) {
+   tokenize(env);
+   env.cursor = 0;
    i_extractor.merge_tokens(env, go_combinations);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, go_keywords);
@@ -160,5 +166,6 @@ function parse(env) {
 }
 
 module.exports = {
-   parse: (text) => parse({ text })
+   tokenize: (text) => tokenize({ text }),
+   parse: (text) => parse({ text }),
 };

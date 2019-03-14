@@ -268,11 +268,17 @@ function decorate_lambda_function(env) {
    return ed - env.cursor + 1;
 }
 
-function parse(env) {
+function tokenize(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, es5_extract_feature);
-   i_extractor.merge_tokens(env, javascript_combinations);
    merge_$(env);
+   return env.tokens;
+}
+
+function parse(env) {
+   tokenize(env);
+   env.cursor = 0;
+   i_extractor.merge_tokens(env, javascript_combinations);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, javascript_keywords);
    env.cursor = 0;
@@ -281,5 +287,6 @@ function parse(env) {
 }
 
 module.exports = {
-   parse: (text) => parse({ text })
+   tokenize: (text) => tokenize({ text }),
+   parse: (text) => parse({ text }),
 };

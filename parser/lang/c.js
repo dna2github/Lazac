@@ -345,9 +345,14 @@ function decorate_bracket(env) {
    return 1;
 }
 
-function parse(env) {
-   env.cursor = 0;
+function tokenize(env) {
+   env.curosr = 0;
    i_extractor.extract_tokens(env, c_extract_feature);
+   return env.tokens;
+}
+
+function parse(env) {
+   tokenize(env);
    i_extractor.merge_tokens(env, c_combinations);
    env.cursor = 0;
    i_decorator.decorate_scope(env, c_decorate_precompile_feature);
@@ -359,5 +364,6 @@ function parse(env) {
 }
 
 module.exports = {
-   parse: (text) => parse({ text })
+   tokenize: (text) => tokenize({ text }),
+   parse: (text) => parse({ text }),
 };

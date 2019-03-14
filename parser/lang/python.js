@@ -387,9 +387,15 @@ function decorate_annotation(env) {
    return ed - st;
 }
 
-function parse(env) {
+function tokenize(env) {
    env.cursor = 0;
    i_extractor.extract_tokens(env, python_extract_feature);
+   return env.tokens;
+}
+
+function parse(env) {
+   tokenize(env);
+   env.cursor = 0;
    i_extractor.merge_tokens(env, python_combinations);
    i_decorator.decorate_bracket(env);
    i_decorator.decorate_keywords(env, python_keywords);
@@ -401,5 +407,6 @@ function parse(env) {
 }
 
 module.exports = {
-   parse: (text) => parse({ text })
+   tokenize: (text) => tokenize({ text }),
+   parse: (text) => parse({ text }),
 };
