@@ -346,7 +346,7 @@ function decorate_bracket(env) {
 }
 
 function tokenize(env) {
-   env.curosr = 0;
+   env.cursor = 0;
    i_extractor.extract_tokens(env, c_extract_feature);
    return env.tokens;
 }
