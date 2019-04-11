@@ -64,11 +64,16 @@ const java_decorate_feature = {
    'transient': [decorate_modifier],
    'volatile': [decorate_modifier],
    '(': [decorate_function, clear_modifier_synchorized],
-   '{': [decorate_block, clear_modifier_synchorized],
+   '{': [decorate_block, clear_all_modifier],
    ':': [clear_modifier_default],
    '=': [decorate_field_with_init, clear_all_modifier],
    ';': [decorate_field, clear_all_modifier],
    ':ast:': null,
+};
+const java_decorate_executable_feature = {
+   '{': [decorate_block],
+   ';': [decorate_statement],
+   'new': [decorate_anonymous_class, decorate_new],
 };
 
 function tokenize(env) {
@@ -86,10 +91,10 @@ function ast() {
    return ast;
 }
 
-function scan_tokens(env, startIndex, endIndex, tree) {
+function scan_tokens(env, startIndex, endIndex, tree, features) {
    for (let i = startIndex; i < endIndex; i++) {
       let x = env.tokens[i];
-      let feature_fn = java_decorate_feature[x.token];
+      let feature_fn = features[x.token];
       if (!feature_fn) continue;
       let r = 0;
       for (let j = 0, n = feature_fn.length; j < n; j++) {
@@ -110,7 +115,7 @@ function parse(env) {
       modifier: [],
    };
    let tree = ast();
-   scan_tokens(env, 0, env.tokens.length, tree);
+   scan_tokens(env, 0, env.tokens.length, tree, java_decorate_feature);
    tree.tokens = env.tokens.map((x, i) => {x.id = i; return x;});
    return tree;
 }
@@ -129,6 +134,7 @@ function decorate_package(env, st, tree) {
       node.index[0] = node.modifier[0].index[0];
       env.state.modifier = [];
    }
+console.log('[package]', env.tokens.slice(node.index[0], node.index[1]).map((x) => x.token).join(''));
    tree.package = node;
    return ed - st + 1;
 }
@@ -146,6 +152,7 @@ function decorate_import(env, st, tree) {
    );
    node.index = [st, ed];
    node.name = [name_st, ed];
+console.log('[import]', env.tokens.slice(node.index[0], node.index[1]).map((x) => x.token).join(''));
    if (!tree.import) tree.import = [];
    tree.import.push(node);
    return ed - st + 1;
@@ -213,7 +220,7 @@ console.log(`[${type}]`, env.tokens.slice(node.header[0], node.header[1]).map((x
    if (!tree[type]) tree[type] = [];
    tree[type].push(node);
    if (ed - header_ed > 1) {
-      scan_tokens(env, header_ed+1, ed, node);
+      scan_tokens(env, header_ed+1, ed, node, java_decorate_feature);
    }
    return ed - st;
 }
@@ -345,7 +352,7 @@ console.log('[new]', env.tokens.slice(node.header[0], node.header[1]).map((x) =>
    if (!tree[type]) tree[type] = [];
    tree[type].push(node);
    if (ed - header_ed > 1) {
-      scan_tokens(env, header_ed+1, ed, node);
+      scan_tokens(env, header_ed+1, ed, node, java_decorate_feature);
    }
    return ed - st;
 }
@@ -431,19 +438,86 @@ console.log('[function]', env.tokens.slice(node.header[0], node.header[1]).map((
    if (!tree[type]) tree[type] = [];
    tree[type].push(node);
    // remove node.type after parse inside the method
+   scan_tokens(env, body_st+1, node.index[1]-1, node, java_decorate_executable_feature);
    delete node.type;
    return ed - st;
 }
 
 function decorate_block(env, st, tree) {
    // static { System.load("test.so"); }
-   // exclude keyword + "(", e.g.:
-   // if, for, while, switch, try, catch, synchronized
+   // if (...) { ... }
+   // { ... }
+   // sychronized { ... }
    let x = env.tokens[st];
    let ed = x.endIndex;
-   // XXX: skip initializer
+   let block = {};
+   block.index = [st, ed];
+   block.body = [st, ed];
+   let pr = i_common.search_prev_skip_spacen(env.tokens, st-1);
+   x = env.tokens[pr];
+   if (x) {
+      if (x.token === ')') {
+         pr = i_common.search_prev(env.tokens, pr-1, (x) => x.endIndex === pr-1);
+         x = env.tokens[pr];
+         block.condition = [x.startIndex, x.endIndex];
+         pr = i_common.search_prev_skip_spacen(env.tokens, pr-1);
+         block.type = x.token;
+         x = env.tokens[pr];
+         if (x.token === 'if') {
+            let pr0 = i_common.search_prev_skip_spacen(env.tokens, pr-1);
+            x = env.tokens[pr0];
+            if (x && x.token === 'else') {
+               pr = pr0;
+               block.type = 'else if';
+            }
+         }
+      } else if (x.token === 'try') {
+         block.type = 'try';
+      } else if (x.token === 'catch') {
+         block.type = 'catch';
+      } else if (x.token === 'finally') {
+         block.type = 'finally';
+      } else if (x.token === 'sychronized') {
+         block.type = 'sychronized';
+      } else {
+         block.type = 'block';
+      }
+      block.index[0] = pr;
+   } else {
+      block.type = 'block';
+   }
+   if (env.state.modifier.length) {
+      block.modifier = env.state.modifier;
+      env.state.modifier = [];
+   }
+   scan_tokens(env, st+1, ed-1, block, java_decorate_executable_feature);
+   if (!tree.executable) tree.executable = [];
+   tree.executable.push(block);
    return ed - st;
 }
+
+function decorate_statement(env, st, tree) {
+   let ed = st--;
+   for(; st >= 0; st --) {
+      let x = env.tokens[st];
+      if (x.token === ';' || x.token === '{' || x.token === '}') {
+         st = i_common.search_next_skip_spacen(env.tokens, st+1);
+         break;
+      }
+      if (x.token === ')' || x.token === ']') {
+         st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex === st+1);
+         continue;
+      }
+   }
+   let node = {};
+   node.index = [st, ed+1];
+console.log('[statement] ===>', env.tokens.slice(node.index[0], node.index[1]).map((x) => x.token).join(''));
+   if (!tree.executable) tree.executable = [];
+   tree.executable.push(node);
+   return 1;
+}
+
+function decorate_new(env, st, tree) {}
 
 function has_modifier_native(env) {
    let has = env.state.modifier.filter((z) => {

@@ -6,9 +6,10 @@ import java.util.ArrayList;
 @Deprecated
 public class X <T> {
    public enum EnumberateA { Sunday, Friday}
-   public interface T1<T> {}
+   public interface T1<T, TXX> {}
    public class T2 {
-      T1 t = new T1<Test>() {};
+      /** Test doc */
+      private T1 t = new T1<Test, Void>() {};
    }
    public static class T3 extends X<String> {
       int b1() { return 0; }
@@ -20,6 +21,10 @@ public class X <T> {
       public static @interface TestX {
          int a = 0;
       }
+   }
+
+   static {
+      int a = 1;
    }
 
    public static interface F<T> {
@@ -62,7 +67,7 @@ public class X <T> {
       }
       public static class TT1<T>{
          public static List<String>[][] test(List< List<? extends String> > p) {
-            F x = new F<String>() {
+            F x = new @a9 F<String>() {
                @Override public void run(int x) {}
             };
             return null;
