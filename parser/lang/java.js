@@ -42,487 +42,34 @@ const java_combinations = [
    ['@', 'interface'],
 ];
 
-const tags = {
-   package: 'package.java',
-   import: 'import.java',
-   annotation: 'annotation.java',
-};
-
 const java_decorate_feature = {
    'package': [decorate_package],
    'import': [decorate_import],
    'class': [decorate_class],
    'interface': [decorate_interface],
-   '@interface': [decorate_annotation_definition],
+   'enum': [decorate_enum],
    'new': [decorate_anonymous_class],
-   '@': [decorate_annotation],
-   '{': [decorate_function, decorate_enum],
-   '}': [decorate_container],
-   ';': [decorate_function],
-   '->': [decorate_lambda_function],
+   '@': [decorate_annotation, /* @interface */decorate_annotation_definition],
+   // '-': [/* -> */decorate_lambda_function],
+   'public': [decorate_modifier],
+   'private': [decorate_modifier],
+   'protected': [decorate_modifier],
+   'abstract': [decorate_modifier],
+   'default': [decorate_modifier_default],
+   'static': [decorate_modifier],
+   'strictfp': [decorate_modifier],
+   'final': [decorate_modifier],
+   'native': [decorate_modifier],
+   'synchorized': [decorate_modifier_synchorized],
+   'transient': [decorate_modifier],
+   'volatile': [decorate_modifier],
+   '(': [decorate_function, clear_modifier_synchorized],
+   '{': [decorate_block, clear_modifier_synchorized],
+   ':': [clear_modifier_default],
+   '=': [decorate_field_with_init, clear_all_modifier],
+   ';': [decorate_field, clear_all_modifier],
+   ':ast:': null,
 };
-
-function decorate_container(env) {
-   if (env.is_in_container) {
-      let last = env.is_in_container[env.is_in_container.length-1];
-      if (!last) return 1;
-      if (env.cursor+1 === last.endIndex) {
-         env.is_in_container.pop();
-      }
-   }
-   return 1;
-}
-
-function decorate_enum(env) {
-   let st = env.cursor, ed = st;
-   let token = env.tokens[st];
-   let annotation = null;
-   if (token.annotation) {
-      annotation = token.annotation;
-      delete token.annotation;
-   }
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   if (st < 0) return 0;
-   let name = [st, st+1];
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   if (st < 0) return 0;
-   token = env.tokens[st];
-   if (token.token !== 'enum') return 0;
-   token.startIndex = st;
-   token.endIndex = env.tokens[ed].endIndex;
-   token.name = [name, name+1];
-   token.tag = i_common.TAG_CLASS;
-   if (annotation) token.annotation = annotation;
-   return 1;
-}
-
-function decorate_anonymous_class(env) {
-   // new F<T>() {...}
-   let st = env.cursor, ed = st;
-   st = i_common.search_next_skip_spacen(env.tokens, st+1)
-   let p = java_detect_basic_type(env.tokens, st);
-   if (!env.tokens[p.endIndex]) return 0;
-   let name = [p.startIndex];
-   ed = p.endIndex;
-   ed = i_common.search_next_skip_spacen(env.tokens, ed);
-   let token = env.tokens[ed];
-   if (!token) return 0;
-   if (token.token === '<') {
-      p = java_detect_type_generic(env.tokens, ed);
-   }
-   if (!env.tokens[p.endIndex]) return 0;
-   ed = p.endIndex;
-   name.push(ed);
-   ed = i_common.search_next_skip_spacen(env.tokens, ed);
-   token = env.tokens[ed];
-   if (!token) return 0;
-   if (token.token !== '(') return 0;
-   let parameter = [token.startIndex, token.endIndex];
-   ed = token.endIndex;
-   ed = i_common.search_next_skip_spacen(env.tokens, ed);
-   token = env.tokens[ed];
-   if (!token) return 0;
-   if (token.token !== '{') return 0;
-   token.anonymous_class_skip = true;
-   ed = token.endIndex;
-   token = env.tokens[st];
-   token.tag = i_common.TAG_CLASS;
-   token.type = name;
-   token.parameter = parameter;
-   token.startIndex = st;
-   token.endIndex = ed;
-   return 1;
-}
-
-function decorate_interface(env) {
-   return decorate_xclass(env, 'interface');
-}
-
-function decorate_annotation_definition(env) {
-   return decorate_xclass(env, '@interface');
-}
-
-function decorate_class(env) {
-   return decorate_xclass(env, 'class');
-}
-
-function decorate_xclass(env, type) {
-   // public static class Name<T extends List<String> > extends A implements B1, B2 {}
-   // TODO: modifiers, e.g. public, static, final
-   let st = env.cursor, ed = st;
-   ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
-   let name = [ed, ed+1], generic = null, extend = null, impl = null;
-   ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
-   let token = env.tokens[ed], p;
-   if (!token) return 0;
-   if (token.token === '<') {
-      p = java_detect_type_generic(env.tokens, ed);
-      generic = [p.startIndex, p.endIndex];
-      ed = i_common.search_next_skip_spacen(env.tokens, p.endIndex);
-      token = env.tokens[ed];
-      if (!token) return 0;
-   }
-   if (token.token === 'extends') {
-      extend = [];
-      do {
-         ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
-         p = java_detect_basic_type(env.tokens, ed);
-         ed = i_common.search_next_skip_spacen(env.tokens, p.endIndex);
-         token = env.tokens[ed];
-         if (!token) return 0;
-         if (token.token === '<') {
-            p.generic = java_detect_type_generic(env.tokens, ed);
-            ed = i_common.search_next_skip_spacen(env.tokens, p.generic.endIndex);
-            token = env.tokens[ed];
-            if (!token) return 0;
-         }
-         extend.push(p);
-      } while (token.token === ',');
-   }
-   if (token.token === 'implements') {
-      impl = [];
-      do {
-         ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
-         p = java_detect_basic_type(env.tokens, ed);
-         ed = i_common.search_next_skip_spacen(env.tokens, p.endIndex);
-         token = env.tokens[ed];
-         if (!token) return 0;
-         if (token.token === '<') {
-            p.generic = java_detect_type_generic(env.tokens, ed);
-            ed = i_common.search_next_skip_spacen(env.token, p.generic.endIndex);
-            token = env.tokens[ed];
-            if (!token) return 0;
-         }
-         impl.push(p);
-      } while (token.token === ',');
-   }
-   if (token.token !== '{') return 0;
-   let annotation = null;
-   if (token.annotation) {
-      annotation = token.annotation;
-      delete token.annotation;
-   }
-   let skip_n = token.startIndex + 1;
-   ed = token.endIndex;
-   token = env.tokens[st];
-   token.tag = i_common.TAG_CLASS;
-   token.type = name;
-   token.startIndex = st;
-   token.endIndex = ed;
-   if (generic) token.generic = generic;
-   if (extend) token.extend = extend;
-   if (impl) token.implement = impl;
-   if (annotation) token.annotation = annotation;
-   if (!env.is_in_container) env.is_in_container = [];
-   env.is_in_container.push({
-      container: true,
-      endIndex: ed,
-   });
-   return skip_n - st;
-}
-
-const lambda_express_bracket = ['(', '{', '['];
-const lambda_express_end = [',', ')', '}', ']', ';'];
-function decorate_lambda_function(env) {
-   let st = env.cursor, ed = st;
-   let lambda_token = env.tokens[st];
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   let parameter = [st+1];
-   let token = env.tokens[st];
-   if (token.token === ')') {
-      st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex !== st+1);
-      if (st < 0) return 0;
-   }
-   parameter.unshift(st);
-   ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
-   token = env.tokens[ed];
-   let skip_n = ed;
-   if (token.token === '{') {
-      skip_n = ed + 1;
-      ed = token.endIndex;
-   } else {
-      for (let i = ed+1; i < env.tokens.length; i++) {
-         token = env.tokens[i];
-         if (lambda_express_bracket.indexOf(token.token) >= 0) {
-            i = token.endIndex - 1;
-         }
-         if (lambda_express_end.indexOf(token.token) >= 0) {
-            ed = i;
-            break;
-         }
-      }
-      if (ed === skip_n) {
-         ed = env.tokens.length;
-      }
-      skip_n = env.cursor + 1;
-   }
-   lambda_token.tag = i_common.TAG_STRING;
-   lambda_token.startIndex = st;
-   lambda_token.endIndex = ed;
-   lambda_token.parameter = parameter;
-   return skip_n - env.cursor;
-}
-
-function decorate_function(env) {
-   let st = env.cursor, ed = st;
-   let token = env.tokens[st];
-   let skip_key = null;
-   if (token.anonymous_class_skip) {
-      skip_key = 'anonymous_class_skip';
-   }
-   if (skip_key) {
-      delete token[skip_key];
-      if (!env.is_in_container) env.is_in_container = [];
-      env.is_in_container.push({
-         container: true,
-         endIndex: token.endIndex,
-      });
-      return 1;
-   }
-   if (env.is_in_container) {
-      let last = env.is_in_container[env.is_in_container.length-1];
-      // TODO: new F() {...} => interface implementation
-      if (last && !last.container) return 0;
-   }
-   // public static <T> ArrayList<T extends List<String> >[][]
-   //                   test(ArrayList<? extends String> x) {}
-   let annotation = null;
-   if (token.annotation) {
-      annotation = token.annotation;
-      delete token.annotation;
-   }
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   if (st < 0) return 0;
-   token = env.tokens[st];
-   if (token.token !== ')') return 0;
-   let parameter = [st+1];
-   st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex !== st+1);
-   if (st < 0) return 0;
-   parameter.unshift(st);
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   if (st < 0) return 0;
-   let name = [st, st+1];
-   // java_detect_type reverse version
-   // - array
-   st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-   if (st < 0) return 0;
-   token = env.tokens[st];
-   while (token.token === ']') {
-      st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex !== st+1);
-      if (st < 0) return 0;
-      st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-      if (st < 0) return 0;
-      token = env.tokens[st];
-   }
-   // - generic
-   if (token.token === '>') {
-      let deep = 1;
-      while (deep) {
-         st = i_common.search_prev(
-            env.tokens, st-1, (x) => x.token !== '<' && x.token !== '>'
-         );
-         if (st < 0) return 0;
-         token = env.tokens[st];
-         if (token.token === '>') {
-            deep ++;
-         } else {
-            deep --;
-         }
-      }
-      st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-      if (st < 0) return 0;
-      token = env.tokens[st];
-   }
-   // - type name
-   let p = st;
-   while (true) {
-      st = i_common.search_prev_skip_space(env.tokens, st-1);
-      if (st < 0) break;
-      token = env.tokens[st];
-      if (token.token !== '.') {
-         st = p;
-         break;
-      }
-      st = i_common.search_prev_skip_spacen(env.tokens, st-1);
-      if (st < 0) return 0;
-   }
-   // TODO: modifiers, e.g. public, static, final
-   token = env.tokens[name[0]];
-   token.tag = i_common.TAG_FUNCTION;
-   token.startIndex = st;
-   // in interface: int a();
-   //                      ^ not {
-   token.endIndex = env.tokens[ed].endIndex || ed;
-   token.name = name;
-   token.parameter = parameter;
-   if (annotation) token.annotation = annotation;
-   if (!env.is_in_container) {
-      env.is_in_container = [];
-   }
-   if (token.endIndex > ed) {
-      env.is_in_container.push({
-         container: false,
-         endIndex: token.endIndex
-      });
-   }
-   return 1;
-}
-
-function java_detect_basic_type(tokens, index) {
-   let st = index, ed = st, t = ed, n = tokens.length;
-   let token;
-   while (t < n && t > 0) {
-      t = i_common.search_next_skip_spacen(tokens, ed+1);
-      token = tokens[t];
-      if (!token) break;
-      if (token.token !== '.') break;
-      t = i_common.search_next_skip_spacen(tokens, t+1);
-      ed = t;
-   }
-   return {
-      startIndex: st, endIndex: ed+1
-   }
-}
-
-function java_detect_type_generic(tokens, index) {
-   let st = index, ed = st;
-   let token;
-   token = tokens[index];
-   if (token.token !== '<') return null;
-   let deep = 1;
-   let n = tokens.length;
-   for (ed = st+1; ed < n; ed++) {
-      token = tokens[ed];
-      if (token.token === '>') deep--;
-      else if (token.token === '<') deep ++;
-      if (!deep) break;
-   }
-   if (deep) return null;
-   return {
-      startIndex: st, endIndex: ed+1
-   };
-}
-
-function java_detect_type_array(tokens, index) {
-   let st = index, ed = st;
-   let token = tokens[index];
-   let dim_position = [st];
-   if (token.token !== '[') return null;
-   let deep = 1;
-   let n = tokens.length;
-   for (ed = st+1; ed < n; ed++) {
-      token = tokens[ed];
-      if (token.token === ']') deep--;
-      else if (token.token === '[') deep ++;
-      if (!deep) {
-         ed = i_common.search_next_skip_spacen(tokens, ed+1);
-         if (ed < 0) break;
-         token = tokens[ed];
-         if (token.token !== '[') break;
-         dim_position.push(ed);
-         deep ++;
-      }
-   }
-   dim_position.push(ed+1);
-   if (deep) return null;
-   return {
-      startIndex: st, endIndex: ed+1,
-      dimension: dim_position
-   };
-}
-
-function java_detect_type(tokens, index) {
-   let start_token = tokens[index];
-   let position = java_detect_basic_type(tokens, index);
-   let t = position.endIndex;
-   t = i_common.search_next_skip_spacen(tokens, t);
-   let generic_position = java_detect_type_generic(tokens, t);
-   if (generic_position) {
-      position.generic = generic_position;
-      position.endIndex = generic_position.endIndex;
-   }
-   t = position.endIndex;
-   t = i_common.search_next_skip_spacen(tokens, t);
-   let array_position = java_detect_type_array(tokens, t);
-   if (array_position) {
-      position.array = array_position;
-      position.endIndex = array_position.endIndex;
-   }
-   start_token.startIndex = position.startIndex;
-   start_token.endIndex = position.endIndex;
-   if (position.generic) start_token.generic = position.generic;
-   if (position.array) start_token.array = position.array.dimension;
-   return position;
-}
-
-function decorate_package(env) {
-   let st = env.cursor;
-   let ed = i_common.search_next_stop(env.tokens, st, [';']);
-   let package_name = i_common.subtokens(env.tokens, st+1, ed, i_common.is_not_space);
-   let package_token = env.tokens[st];
-   package_token.tag = tags.package;
-   package_token.startIndex = st;
-   package_token.endIndex = ed;
-   package_token.package = package_name;
-   return ed - st;
-}
-
-function decorate_import(env) {
-   let st = env.cursor;
-   let ed = i_common.search_next_stop(env.tokens, st+1, [';']);
-   let package_name = i_common.subtokens(env.tokens, st+1, ed, i_common.is_not_space);
-   let import_token = env.tokens[st];
-   import_token.tag = tags.import;
-   import_token.startIndex = st;
-   import_token.endIndex = ed;
-   package_name = package_name.split('.');
-   let import_class = package_name.pop();
-   let import_package = package_name.join('.');
-   import_token.name = import_class;
-   import_token.package = import_package;
-   return ed - st;
-}
-
-function decorate_annotation(env) {
-   //@depend decorate_bracket
-   let st = env.cursor;
-   let ed = i_common.search_next_skip_spacen(env.tokens, st+1);
-   let anno_token = env.tokens[st];
-   let type_position = java_detect_type(env.tokens, ed);
-   if (type_position.endIndex - type_position.startIndex === 1) {
-      //@depend !merge_tokens
-      if (env.tokens[type_position.startIndex].token === 'interface') {
-         anno_token.java = '@interface';
-         return type_position.endIndex - st;
-      }
-   }
-   ed = type_position.endIndex;
-   ed = i_common.search_next_skip_spacen(env.tokens, ed);
-   let next_token = env.tokens[ed];
-   anno_token.tag = tags.annotation;
-   if (next_token && next_token.token === '(') {
-      anno_token.startIndex = st;
-      anno_token.endIndex = next_token.endIndex;
-   } else {
-      anno_token.startIndex = st;
-      anno_token.endIndex = type_position.endIndex;
-   }
-   ed = anno_token.endIndex;
-   // find next { or ; and attach annotation info
-   for (let i = ed+1; i < env.tokens.length; i++) {
-      let token = env.tokens[i];
-      if (token.token === '(') {
-         i = token.endIndex - 1;
-         continue;
-      }
-      if (token.token === '{') {
-         if (!token.annotation) token.annotation = [];
-         token.annotation.push([anno_token.startIndex, anno_token.endIndex]);
-         break;
-      }
-   }
-   return ed - st;
-}
 
 function tokenize(env) {
    env.cursor = 0;
@@ -530,15 +77,447 @@ function tokenize(env) {
    return env.tokens;
 }
 
+function ast() {
+   let ast = java_decorate_feature[':ast:'];
+   if (!ast) {
+      ast = {};
+      java_decorate_feature[':ast:'] = ast;
+   }
+   return ast;
+}
+
+function scan_tokens(env, startIndex, endIndex, tree) {
+   for (let i = startIndex; i < endIndex; i++) {
+      let x = env.tokens[i];
+      let feature_fn = java_decorate_feature[x.token];
+      if (!feature_fn) continue;
+      let r = 0;
+      for (let j = 0, n = feature_fn.length; j < n; j++) {
+         let fn = feature_fn[j];
+         r = fn(env, i, tree);
+         if (r > 0) break;
+      }
+      if (r > 0) i += r - 1;
+   }
+   return env;
+}
+
 function parse(env) {
    tokenize(env);
-   env.cursor = 0;
-   i_extractor.merge_tokens(env, java_combinations);
    i_decorator.decorate_bracket(env);
-   i_decorator.decorate_keywords(env, java_keywords);
-   env.cursor = 0;
-   i_decorator.decorate_scope(env, java_decorate_feature);
-   return env.tokens;
+   env.state = {
+      container: null,
+      modifier: [],
+   };
+   let tree = ast();
+   scan_tokens(env, 0, env.tokens.length, tree);
+   tree.tokens = env.tokens.map((x, i) => {x.id = i; return x;});
+   return tree;
+}
+
+function decorate_package(env, st, tree) {
+   // @A() package test.test.test;
+   let name_st = i_common.search_next_skip_space(env.tokens, st+1);
+   let ed = i_common.search_next(
+      env.tokens, name_st, (x) => x.token !== ';' && x.token !== '\n'
+   );
+   let node = {};
+   node.index = [st, ed],
+   node.name = [name_st, ed];
+   if (env.state.modifier.length) {
+      node.modifier = env.state.modifier;
+      node.index[0] = node.modifier[0].index[0];
+      env.state.modifier = [];
+   }
+   tree.package = node;
+   return ed - st + 1;
+}
+
+function decorate_import(env, st, tree) {
+   let node = {};
+   let name_st = i_common.search_next_skip_space(env.tokens, st+1);
+   let x = env.tokens[name_st];
+   if (x.token === 'static') {
+      node.static = true;
+      name_st = i_common.search_next_skip_space(env.tokens, name_st+1);
+   }
+   let ed = i_common.search_next(
+      env.tokens, name_st, (x) => x.token !== ';' && x.token !== '\n'
+   );
+   node.index = [st, ed];
+   node.name = [name_st, ed];
+   if (!tree.import) tree.import = [];
+   tree.import.push(node);
+   return ed - st + 1;
+}
+
+function decorate_class(env, st, tree) {
+   let lookback = i_common.search_prev_skip_spacen(env.tokens, st-1);
+   let x = env.tokens[lookback];
+   if (x && x.token === '.') {
+      // skip xx.class
+      return 0;
+   }
+   return decorate_type_definition(env, st, tree, 'class');
+}
+
+function decorate_interface(env, st, tree) {
+   return decorate_type_definition(env, st, tree, 'interface');
+}
+
+function decorate_enum(env, st, tree) {
+   return decorate_type_definition(env, st, tree, 'enum');
+}
+
+function decorate_annotation_definition(env, st, tree) {
+   let x = env.tokens[st + 1];
+   if (!x || x.token !== 'interface') {
+      return 0;
+   }
+   return decorate_type_definition(env, st, tree, '@interface');
+}
+
+function decorate_type_definition(env, st, tree, type) {
+   let node = {};
+   let ed = st + 1;
+   let header_ed = st;
+   let x;
+   for (let n = env.tokens.length; ed < n; ed++) {
+      x = env.tokens[ed];
+      if (x.token === '[' || x.token === '(') {
+         ed = x.endIndex; - 1
+         continue;
+      }
+      if (x.token === '{') {
+         header_ed = ed;
+         ed = x.endIndex;
+         break;
+      }
+      if (x.token === ';') {
+         header_ed = ed;
+         ed ++;
+         break;
+      }
+   }
+   let name_st = i_common.search_next_skip_spacen(env.tokens, st+1);
+   node.name = [name_st, name_st+1];
+   node.index = [st, ed];
+   node.header = [st, header_ed];
+console.log(`[${type}]`, env.tokens.slice(node.header[0], node.header[1]).map((x) => x.token).join(''));
+   node.body = [header_ed, ed];
+   if (env.state.modifier.length) {
+      node.modifier = env.state.modifier;
+      node.index[0] = node.modifier[0].index[0];
+      env.state.modifier = [];
+   }
+   if (!tree[type]) tree[type] = [];
+   tree[type].push(node);
+   if (ed - header_ed > 1) {
+      scan_tokens(env, header_ed+1, ed, node);
+   }
+   return ed - st;
+}
+
+function decorate_annotation(env, st, tree) {
+   let node = {};
+   let x = env.tokens[st + 1];
+   if (!x || x.token === 'interface') {
+      return 0;
+   }
+   let ed = i_common.search_next_skip_spacen(env.tokens, st+1);
+   do {
+      ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
+      x = env.tokens[ed];
+      if (!x) return 0;
+      if (x.token === '.') {
+         ed = i_common.search_next_skip_spacen(env.tokens, ed+1);
+         continue;
+      }
+      if (x.token === '(') {
+         ed = x.endIndex;
+         break;
+      }
+      ed = i_common.search_prev_skip_spacen(env.tokens, ed-1) + 1;
+      break;
+   } while (true);
+   node.index = [st, ed];
+   env.state.modifier.push(node);
+   return ed - st;
+}
+
+function decorate_modifier(env, st, tree) {
+   let node = { index: [st, st+1] };
+   env.state.modifier.push(node);
+   return 1;
+}
+
+function decorate_modifier_synchorized(env, st, tree) {
+   return decorate_modifier(env, st, tree);
+}
+
+function decorate_modifier_default(env, st, tree) {
+   return decorate_modifier(env, st, tree);
+}
+
+function clear_modifier_synchorized(env, st, tree) {
+   return clear_modifier(env, st, tree, 'synchorized');
+}
+
+function clear_modifier_default(env, st, tree) {
+   return clear_modifier(env, st, tree, 'default');
+}
+
+function clear_modifier(env, st, tree, keyword) {
+   let m = env.state.modifier[env.state.modifier.length - 1];
+   if (!m) return 0;
+   let x = env.tokens[m.index[0]];
+   if (x.token === keyword) {
+      env.state.modifier.pop();
+   }
+   return 0;
+}
+
+function clear_all_modifier(env, st, tree) {
+   if (env.state.modifier.length) {
+      env.state.modifier = [];
+   }
+   return 0;
+}
+
+function decorate_anonymous_class(env, st, tree) {
+   // new <T> @A @B() X.Test<String>() {}
+   let node = {};
+   let ed = st + 1;
+   let header_ed = st;
+   let x;
+   let is_anonymous_class = false;
+   for (let n = env.tokens.length; ed < n; ed++) {
+      x = env.tokens[ed];
+      if (x.token === '@') {
+         ed += decorate_annotation(env, ed, node) - 1;
+         continue;
+      }
+      if (x.token === '[') {
+         ed = x.endIndex - 1;
+         continue;
+      }
+      if (x.token === '(') {
+         ed = x.endIndex - 1;
+         let test = env.tokens[i_common.search_next_skip_spacen(env.tokens, ed+1)];
+         if (test && test.token === '{') {
+            is_anonymous_class = true;
+         }
+         continue;
+      }
+      if (x.token === '{') {
+         header_ed = ed;
+         ed = x.endIndex;
+         break;
+      }
+      if (x.token === ';') {
+         header_ed = ed;
+         ed ++;
+         break;
+      }
+   }
+   if (!is_anonymous_class) {
+      clear_all_modifier(env, st, node);
+      return 0;
+   }
+   node.op_new = true;
+   node.index = [st, ed];
+   node.header = [st, header_ed];
+   node.body = [header_ed, ed];
+   if (env.state.modifier.length) {
+      node.modifier = env.state.modifier;
+      node.index[0] = node.modifier[0].index[0];
+      node.header[0] = i_common.search_next_skip_spacen(
+         env.tokens,
+         node.modifier[node.modifier.length-1].index[1]
+      );
+      env.state.modifier = [];
+   } else {
+      node.index[0] = i_common.search_next_skip_spacen(env.tokens, st+1);
+      node.header[0] = node.index[0];
+   }
+console.log('[new]', env.tokens.slice(node.header[0], node.header[1]).map((x) => x.token).join(''));
+   let type = 'class';
+   if (!tree[type]) tree[type] = [];
+   tree[type].push(node);
+   if (ed - header_ed > 1) {
+      scan_tokens(env, header_ed+1, ed, node);
+   }
+   return ed - st;
+}
+
+function decorate_function(env, st, tree) {
+   // should not define a method inside a method
+   if (tree.type === i_common.TAG_FUNCTION) {
+      return 0;
+   }
+   // exclude keyword + "(", e.g.:
+   // if, for, while, switch, try, catch, synchronized
+   let x = env.tokens[st];
+   let ed = x.endIndex;
+   // function should follow like ( ... ) [throws ...] { ... }
+   let body_st = i_common.search_next_skip_spacen(env.tokens, ed);
+   let throws_sted = null;
+   x = env.tokens[body_st];
+   if (!x) return 0;
+   if (x.token === 'throws') {
+      throws_sted = [body_st, 0];
+      body_st = i_common.search_next(
+         env.tokens, body_st+1, (x) => x.token !== '{' && x.token !== ';'
+      );
+      throws_sted[1] = body_st - 1;
+      // must be a method definition (in interface or method)
+   } else {
+      body_st = i_common.search_next(
+         env.tokens, body_st, (x) => x.token !== '{' && x.token !== ';'
+      );
+      // not sure if it is method definition
+   }
+   x = env.tokens[body_st];
+   if (!x) return 0;
+   // skip method invokation like a = test();
+   // skip method definition in interface like int test() throws Exception;
+   let node = {};
+   if (x.token === ';') {
+      if (has_modifier_native(env)) {
+         // keep native definition like public native void helloworld();
+         body_st ++;
+         ed = body_st + 1;
+         node.native = true;
+      } else {
+         // keep declaration like public abstract int test();
+         body_st ++;
+         ed = body_st + 1;
+         // clear_all_modifier(env, st, tree);
+         // return 0;
+      }
+      node.declaration = true;
+   } else {
+      ed = x.endIndex;
+   }
+   let def_st = st;
+   let header_st = st;
+   if (env.state.modifier.length) {
+      def_st = env.state.modifier[0].index[0];
+      header_st = i_common.search_next_skip_spacen(
+         env.tokens,
+         env.state.modifier[env.state.modifier.length-1].index[1]
+      );
+      node.modifier = env.state.modifier;
+      env.state.modifier = [];
+   } else {
+      // class T { void test() {} }
+      // class T { public int a; void test() {} }
+      // class T { enum test { A,B,C } void test2() {} }
+      def_st = i_common.search_prev(
+         env.tokens, st-1, (x) => x.token !== '{' && x.token !== '}' && x.token !== ';'
+      );
+      def_st = i_common.search_next_skip_spacen(env.tokens, def_st+1);
+      header_st = def_st;
+   }
+   let name_st = i_common.search_prev_skip_spacen(env.tokens, st-1);
+   node.type = i_common.TAG_FUNCTION;
+   node.name = [name_st, name_st+1];
+   node.index = [def_st, ed];
+   node.header = [header_st, body_st-1];
+console.log('[function]', env.tokens.slice(node.header[0], node.header[1]).map((x) => x.token).join(''));
+   if (throws_sted) node.throws = throws_sted;
+   node.body = [body_st, ed];
+   let type = 'method';
+   if (!tree[type]) tree[type] = [];
+   tree[type].push(node);
+   // remove node.type after parse inside the method
+   delete node.type;
+   return ed - st;
+}
+
+function decorate_block(env, st, tree) {
+   // static { System.load("test.so"); }
+   // exclude keyword + "(", e.g.:
+   // if, for, while, switch, try, catch, synchronized
+   let x = env.tokens[st];
+   let ed = x.endIndex;
+   // XXX: skip initializer
+   return ed - st;
+}
+
+function has_modifier_native(env) {
+   let has = env.state.modifier.filter((z) => {
+      if (z.index[1] - z.index[0] !== 1) return false;
+      let x = env.tokens[z.index[0]];
+      if (!x) return false;
+      if (x.token === 'native') return true;
+      return false;
+   })[0];
+   return !!has;
+}
+
+function decorate_field(env, st, tree) {
+   // {  }  ;
+   let ed = st--;
+   for(; st >= 0; st --) {
+      let x = env.tokens[st];
+      if (x.token === ';' || x.token === '{' || x.token === '}') {
+         st = i_common.search_next_skip_spacen(env.tokens, st+1);
+         break;
+      }
+      if (x.token === ')' || x.token === ']') {
+         st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex === st+1);
+         continue;
+      }
+   }
+   let node = {};
+   node.index = [st, ed+1];
+console.log('[field]', env.tokens.slice(node.index[0], node.index[1]).map((x) => x.token).join(''));
+   if (env.state.modifier.length) {
+      node.modifier = env.state.modifier;
+      env.state.modifier = [];
+   }
+   if (!tree.field) tree.field = [];
+   tree.field.push(node);
+   return 1;
+}
+
+function decorate_field_with_init(env, st, tree) {
+   let assign_st = st;
+   let ed = st--;
+   for(; st >= 0; st --) {
+      let x = env.tokens[st];
+      if (x.token === ';' || x.token === '{' || x.token === '}') {
+         st = i_common.search_next_skip_spacen(env.tokens, st+1);
+         break;
+      }
+      if (x.token === ')' || x.token === ']') {
+         st = i_common.search_prev(env.tokens, st-1, (x) => x.endIndex === st+1);
+         continue;
+      }
+   }
+   for (let n = env.tokens.length; ed < n; ed ++) {
+      let x = env.tokens[ed];
+      if (x.token === ';') {
+         ed ++;
+         break;
+      }
+      if (x.token === '(' || x.token === '[' || x.token === '{') {
+         ed = x.endIndex - 1;
+         continue;
+      }
+   }
+   // cover e.g. int a; int a, b; int a = 0, b = 1; int a, b = 1; ...
+   let node = {};
+   node.index = [st, ed];
+console.log('[field]', env.tokens.slice(node.index[0], node.index[1]).map((x) => x.token).join(''));
+   if (env.state.modifier.length) {
+      node.modifier = env.state.modifier;
+      env.state.modifier = [];
+   }
+   if (!tree.field) tree.field = [];
+   tree.field.push(node);
+   return ed - assign_st;
 }
 
 module.exports = {
