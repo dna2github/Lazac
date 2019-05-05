@@ -47,5 +47,10 @@ struct x1a {
 m1 () {} m2 () {}
 
 int main(int argc, const char ** argv) {
+#ifdef A
    return 0;
 }
+#else
+   return 1;
+}
+#endif

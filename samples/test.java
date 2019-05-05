@@ -42,6 +42,7 @@ public class X <T> {
       a += x[0].b1();
       a *= 1 << 2 + 3;
       a >>>= a++ + 1;
+      if (a > 0) { a = 0; }
    }
 
    public @interface a5 {}

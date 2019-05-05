@@ -517,6 +517,9 @@ console.log('[statement] ===>', env.tokens.slice(node.index[0], node.index[1]).m
    return 1;
 }
 
+function scan_function_invocation(env, st, ed, tree) {
+}
+
 function decorate_new(env, st, tree) {}
 
 function has_modifier_native(env) {
