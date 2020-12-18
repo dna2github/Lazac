@@ -48,22 +48,21 @@ async function processLine(env, fn, isAsync, resolveFn) {
    processLine(env, fn, isAsync);
 }
 
-/*
-usage example:
-
-readTextFileLineByLine(process.argv[2], (line, no) => {
-   return new Promise((r) => {
-      setTimeout(() => {
-         console.log(('0000' + no).slice(-4), line);
-         r();
-      }, ~~(Math.random()*200));
+if (require.main === module) {
+   // usage example
+   readTextFileLineByLine(process.argv[2], (line, no) => {
+      return new Promise((r) => {
+         setTimeout(() => {
+            console.log(('0000' + no).slice(-4), line);
+            r();
+         }, ~~(Math.random()*200));
+      });
+   }, true).then((isBinaryFile) => {
+      if (isBinaryFile) console.log('[!] it is binary file');
+   }, (err) => {
+      console.error(err);
    });
-}, true).then((isBinaryFile) => {
-   if (isBinaryFile) console.log('[!] it is binary file');
-}, (err) => {
-   console.error(err);
-});
-*/
+}
 
 module.exports = {
    api: { readTextFileLineByLine, }
